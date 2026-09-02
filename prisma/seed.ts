@@ -125,13 +125,13 @@ async function main() {
   const teamCat = await prisma.sportCategory.upsert({
     where: { name: 'Team Sports' },
     update: {},
-    create: { name: 'Team Sports', slug: 'team-sports', description: 'Squad-based athletic disciplines' },
+    create: { name: 'Team Sports', type: 'TEAM' },
   });
 
   const indCat = await prisma.sportCategory.upsert({
     where: { name: 'Individual & Racket Sports' },
     update: {},
-    create: { name: 'Individual & Racket Sports', slug: 'individual-sports', description: 'Singles, doubles, and precision sports' },
+    create: { name: 'Individual & Racket Sports', type: 'INDIVIDUAL' },
   });
 
   const initialSports = [

@@ -16,18 +16,30 @@ import {
   Check,
   X,
   CreditCard,
-  Plus
+  Plus,
+  ChevronDown,
+  Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 
+const FALLBACK_SPORTS = [
+  { id: 'cricket', name: 'Cricket', icon: '🏏', slug: 'cricket' },
+  { id: 'football', name: 'Football', icon: '⚽', slug: 'football' },
+  { id: 'volleyball', name: 'Volleyball', icon: '🏐', slug: 'volleyball' },
+  { id: 'badminton', name: 'Badminton', icon: '🏸', slug: 'badminton' },
+  { id: 'table-tennis', name: 'Table Tennis', icon: '🏓', slug: 'table-tennis' },
+  { id: 'snooker', name: 'Snooker', icon: '🎱', slug: 'snooker' },
+];
+
 export default function TransfersPage() {
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [sports, setSports] = useState<any[]>([]);
+  const [sports, setSports] = useState<any[]>(FALLBACK_SPORTS);
   const [teams, setTeams] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [userMemberships, setUserMemberships] = useState<any[]>([]);
 
   // Form State
-  const [selectedSportId, setSelectedSportId] = useState('');
+  const [selectedSportId, setSelectedSportId] = useState(FALLBACK_SPORTS[0].id);
   const [newTeamId, setNewTeamId] = useState('');
   const [reason, setReason] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
@@ -57,18 +69,23 @@ export default function TransfersPage() {
   const loadData = async () => {
     try {
       const [trRes, spRes, tmRes, meRes] = await Promise.all([
-        fetch('/api/transfers').then((r) => r.json()),
-        fetch('/api/sports').then((r) => r.json()),
-        fetch('/api/teams?status=ACTIVE').then((r) => r.json()),
-        fetch('/api/auth/me').then((r) => r.json()),
+        fetch('/api/transfers').then((r) => r.json()).catch(() => ({ transfers: [] })),
+        fetch('/api/sports').then((r) => r.json()).catch(() => ({ sports: [] })),
+        fetch('/api/teams?status=ACTIVE').then((r) => r.json()).catch(() => ({ teams: [] })),
+        fetch('/api/auth/me').then((r) => r.json()).catch(() => ({ user: null })),
       ]);
 
       setTransfers(trRes.transfers || []);
-      setSports(spRes.sports || []);
+      if (spRes.sports && spRes.sports.length > 0) {
+        setSports(spRes.sports);
+        setSelectedSportId(spRes.sports[0].id);
+      }
       setTeams(tmRes.teams || []);
       setUser(meRes.user);
 
-      if (spRes.sports?.length) setSelectedSportId(spRes.sports[0].id);
+      if (meRes.user?.teamMemberships) {
+        setUserMemberships(meRes.user.teamMemberships.filter((m: any) => m.status === 'ACTIVE'));
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -93,6 +110,7 @@ export default function TransfersPage() {
 
       setFormMsg({ text: 'Transfer request submitted successfully! PKR 100 fee order generated.', type: 'success' });
       setReason('');
+      setNewTeamId('');
       loadData();
     } catch (err: any) {
       setFormMsg({ text: err.message, type: 'error' });
@@ -166,6 +184,8 @@ export default function TransfersPage() {
   const completedCount = transfers.filter((t) => t.status === 'COMPLETED').length;
   const inFlightCount = transfers.filter((t) => t.status !== 'COMPLETED' && t.status !== 'REJECTED' && t.status !== 'CANCELLED').length;
 
+  const currentSportTeams = teams.filter((t) => !selectedSportId || t.sportId === selectedSportId || t.sport?.id === selectedSportId);
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto py-4">
       {/* Header & Market Summary */}
@@ -209,7 +229,7 @@ export default function TransfersPage() {
               <Plus className="w-4 h-4 text-emerald-400" />
               <span>Initiate Official Transfer</span>
             </h2>
-            <p className="text-xs text-slate-400">Select target squad and submit Rs. 100 transfer application.</p>
+            <p className="text-xs text-slate-400">Select sport and target squad to submit your transfer application.</p>
           </div>
 
           {formMsg && (
@@ -222,65 +242,99 @@ export default function TransfersPage() {
             </div>
           )}
 
-          <form onSubmit={handleRequestTransfer} className="space-y-4">
+          <form onSubmit={handleRequestTransfer} className="space-y-5">
+            {/* Sport Selector Pills */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Sport</label>
-              <select
-                value={selectedSportId}
-                onChange={(e) => setSelectedSportId(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold"
-              >
-                {sports.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-bold text-slate-300 uppercase mb-2">1. Select Sport Discipline</label>
+              <div className="grid grid-cols-2 gap-2">
+                {sports.map((s) => {
+                  const isSelected = selectedSportId === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSportId(s.id);
+                        setNewTeamId('');
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition flex items-center gap-2.5 ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-950/40 text-white shadow-lg shadow-emerald-500/10'
+                          : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      <span className="text-xl">{s.icon || '🏅'}</span>
+                      <span className="text-xs font-bold truncate">{s.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
+            {/* Destination Team Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Destination Target Squad</label>
-              <select
-                value={newTeamId}
-                onChange={(e) => setNewTeamId(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold"
-              >
-                <option value="">-- Choose New Team --</option>
-                {teams
-                  .filter((t) => !selectedSportId || t.sportId === selectedSportId)
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.city?.name})</option>
-                  ))}
-              </select>
+              <label className="block text-xs font-bold text-slate-300 uppercase mb-2">2. Destination Target Squad</label>
+              {currentSportTeams.length > 0 ? (
+                <div className="relative">
+                  <select
+                    value={newTeamId}
+                    onChange={(e) => setNewTeamId(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-white text-xs font-bold focus:outline-none focus:border-emerald-500 appearance-none pr-10 cursor-pointer"
+                  >
+                    <option value="" className="bg-slate-900 text-slate-400">-- Choose Destination Team --</option>
+                    {currentSportTeams.map((t) => (
+                      <option key={t.id} value={t.id} className="bg-slate-900 text-white py-2">
+                        {t.name} {t.city?.name ? `(${t.city.name})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-center space-y-2">
+                  <Shield className="w-6 h-6 text-slate-500 mx-auto" />
+                  <p className="text-xs text-slate-300 font-semibold">No squads registered in this sport yet</p>
+                  <p className="text-[10px] text-slate-500">Captains can register clubs using the Team Registration Wizard.</p>
+                  <Link href="/teams/create" className="inline-block text-xs font-bold text-emerald-400 hover:underline">
+                    Register a Squad &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
 
+            {/* Transfer Reason */}
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Transfer Reason</label>
+              <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">3. Athletic Rationale</label>
               <textarea
                 rows={3}
                 required
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="State athletic rationale for squad transfer..."
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs"
+                placeholder="State athletic rationale for squad transfer (e.g., relocation, match playing time)..."
+                className="w-full px-4 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500 placeholder-slate-500"
               />
             </div>
 
+            {/* Fee Notice */}
             <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-1 text-slate-300">
               <div className="flex justify-between font-bold text-white">
                 <span>Transfer Processing Fee:</span>
                 <span className="text-emerald-400 font-mono">PKR 100.00</span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Historical membership records in current club are permanently preserved as FORMER.
+                Historical membership records in current squad are permanently preserved as FORMER.
               </p>
             </div>
 
             <button
               type="submit"
               disabled={submittingRequest || !newTeamId}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs shadow-lg transition"
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black rounded-2xl text-xs shadow-lg shadow-emerald-500/20 transition cursor-pointer"
             >
-              {submittingRequest ? 'Submitting...' : 'Submit Transfer Application &rarr;'}
+              {submittingRequest ? 'Submitting Transfer...' : 'Submit Transfer Application &rarr;'}
             </button>
           </form>
         </div>
@@ -288,197 +342,182 @@ export default function TransfersPage() {
         {/* Right Column: Transfer Feed & Action Cards */}
         <div className="lg:col-span-2 space-y-6">
           {/* Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900 border border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-3xl bg-slate-900 border border-slate-800 shadow-md">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-bold text-slate-300">Filters:</span>
+              <span className="text-xs font-bold text-slate-300">Filter Transfers:</span>
             </div>
 
             <div className="flex items-center gap-3">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-bold text-white"
+                className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold cursor-pointer"
               >
-                <option value="ALL">All Statuses</option>
-                <option value="REQUESTED">Requested</option>
-                <option value="PAYMENT_SUBMITTED">Payment Submitted</option>
-                <option value="PENDING_APPROVAL">Pending Approval</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="REJECTED">Rejected</option>
+                <option value="ALL" className="bg-slate-900 text-white">All Statuses</option>
+                <option value="PENDING_PAYMENT" className="bg-slate-900 text-white">Pending Payment</option>
+                <option value="PAYMENT_SUBMITTED" className="bg-slate-900 text-white">Payment Submitted</option>
+                <option value="PENDING_APPROVAL" className="bg-slate-900 text-white">Pending Approval</option>
+                <option value="APPROVED" className="bg-slate-900 text-white">Approved</option>
+                <option value="COMPLETED" className="bg-slate-900 text-white">Completed</option>
+                <option value="REJECTED" className="bg-slate-900 text-white">Rejected</option>
               </select>
 
               <select
                 value={sportFilter}
                 onChange={(e) => setSportFilter(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-bold text-white"
+                className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold cursor-pointer"
               >
-                <option value="ALL">All Sports</option>
+                <option value="ALL" className="bg-slate-900 text-white">All Sports</option>
                 {sports.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {loading ? (
-            <div className="text-center py-20 text-slate-400">Loading Transfer Hub...</div>
-          ) : filteredTransfers.length === 0 ? (
-            <div className="p-12 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-2">
+          {/* Transfers List */}
+          {filteredTransfers.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3">
               <ArrowRightLeft className="w-10 h-10 text-slate-600 mx-auto" />
-              <h3 className="text-base font-bold text-white">No Transfers Found</h3>
-              <p className="text-xs text-slate-400">No transfer records matched your selected criteria.</p>
+              <div className="text-base font-bold text-white">No Transfer Records Found</div>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                No player transfer applications match the selected filter. Submit a transfer request using the form.
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
               {filteredTransfers.map((tr) => {
-                const isPlayer = tr.playerId === user?.id;
-                const isOldCaptain = tr.oldTeam?.captainId === user?.id;
-                const isNewCaptain = tr.newTeam?.captainId === user?.id;
-                const isPaymentPending = !tr.payment || tr.payment.status === 'PENDING';
+                const isPlayer = user?.id === tr.playerId;
+                const isReleasingCaptain = user?.id === tr.oldTeam?.captainId;
+                const isReceivingCaptain = user?.id === tr.newTeam?.captainId;
 
                 return (
                   <div key={tr.id} className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
-                    {/* Header Row */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-emerald-400 text-xs">
-                          {tr.player?.fullName?.[0]}
+                        <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">
+                          <User className="w-5 h-5" />
                         </div>
                         <div>
-                          <h3 className="font-bold text-white text-sm">{tr.player?.fullName}</h3>
-                          <span className="text-[11px] text-slate-400">{tr.sport?.name} &bull; {tr.city?.name}</span>
+                          <h3 className="text-sm font-black text-white">{tr.player?.fullName || 'Athlete'}</h3>
+                          <span className="text-[10px] text-slate-400">Ref: {tr.id.slice(0, 8)} &bull; {tr.sport?.name || 'Sport'}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            tr.status === 'COMPLETED'
-                              ? 'success'
-                              : tr.status === 'REJECTED' || tr.status === 'CANCELLED'
-                              ? 'danger'
-                              : 'gold'
-                          }
-                        >
-                          {tr.status}
-                        </Badge>
-                        <span className="text-xs font-mono font-bold text-emerald-400">Rs. {tr.fee}</span>
+                      <Badge
+                        variant={
+                          tr.status === 'COMPLETED'
+                            ? 'green'
+                            : tr.status === 'REJECTED' || tr.status === 'CANCELLED'
+                            ? 'red'
+                            : tr.status === 'PENDING_PAYMENT'
+                            ? 'yellow'
+                            : 'blue'
+                        }
+                      >
+                        {tr.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </div>
+
+                    {/* Transfer Route */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center py-2 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+                      <div className="text-center sm:text-left">
+                        <span className="block text-[10px] text-slate-500 uppercase font-bold">Origin Club</span>
+                        <span className="text-xs font-bold text-white">{tr.oldTeam?.name || 'Previous Team'}</span>
+                        <span className="block text-[10px] text-slate-400">{tr.oldTeam?.city?.name}</span>
+                      </div>
+
+                      <div className="flex items-center justify-center text-emerald-400 font-bold text-xs gap-1">
+                        <ArrowRightLeft className="w-4 h-4 animate-pulse" />
+                        <span>PKR {tr.fee}</span>
+                      </div>
+
+                      <div className="text-center sm:text-right">
+                        <span className="block text-[10px] text-slate-500 uppercase font-bold">Target Club</span>
+                        <span className="text-xs font-bold text-emerald-400">{tr.newTeam?.name || 'Destination Team'}</span>
+                        <span className="block text-[10px] text-slate-400">{tr.newTeam?.city?.name}</span>
                       </div>
                     </div>
 
-                    {/* Team Migration Banner */}
-                    <div className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between text-xs">
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] text-rose-400 uppercase font-bold">Releasing Squad</span>
-                        <span className="font-bold text-white block">{tr.oldTeam?.name}</span>
-                        <span className="text-[10px] text-slate-400">Capt: {tr.oldTeam?.captain?.fullName || 'Captain'}</span>
-                      </div>
-
-                      <div className="flex items-center justify-center px-4">
-                        <ArrowRightLeft className="w-5 h-5 text-emerald-400" />
-                      </div>
-
-                      <div className="space-y-0.5 text-right">
-                        <span className="text-[10px] text-emerald-400 uppercase font-bold">Receiving Squad</span>
-                        <span className="font-bold text-white block">{tr.newTeam?.name}</span>
-                        <span className="text-[10px] text-slate-400">Capt: {tr.newTeam?.captain?.fullName || 'Captain'}</span>
-                      </div>
-                    </div>
-
-                    {/* Progress Checklist */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${tr.releasingApproved ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                        {tr.releasingApproved ? <Check className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                        <span>Releasing NOC</span>
-                      </div>
-
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${!isPaymentPending ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                        {!isPaymentPending ? <Check className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                        <span>Rs. 100 Fee Paid</span>
-                      </div>
-
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${tr.receivingApproved ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                        {tr.receivingApproved ? <Check className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                        <span>Receiving Accept</span>
-                      </div>
-
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${tr.status === 'COMPLETED' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                        {tr.status === 'COMPLETED' ? <Check className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                        <span>Admin Finalized</span>
-                      </div>
-                    </div>
-
-                    {/* Actions Row */}
-                    {tr.status !== 'COMPLETED' && tr.status !== 'REJECTED' && tr.status !== 'CANCELLED' && (
-                      <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2">
-                          {isPaymentPending && (isPlayer || isNewCaptain || isAdmin) && (
-                            <button
-                              onClick={() => setPayTransfer(tr)}
-                              className="px-4 py-2 bg-purple-500 hover:bg-purple-400 text-slate-950 font-black rounded-xl transition flex items-center gap-1.5 shadow"
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                              <span>Pay Rs. 100 Fee</span>
-                            </button>
-                          )}
-
-                          {!tr.releasingApproved && (isOldCaptain || isAdmin) && (
-                            <button
-                              onClick={() => handleAction(tr.id, 'RELEASE_APPROVE')}
-                              disabled={actionLoading}
-                              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition flex items-center gap-1.5 shadow"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Grant Releasing NOC</span>
-                            </button>
-                          )}
-
-                          {!tr.receivingApproved && (isNewCaptain || isAdmin) && (
-                            <button
-                              onClick={() => handleAction(tr.id, 'RECEIVING_APPROVE')}
-                              disabled={actionLoading}
-                              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition flex items-center gap-1.5 shadow"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Accept into Squad</span>
-                            </button>
-                          )}
-
-                          {isAdmin && (
-                            <button
-                              onClick={() => handleAction(tr.id, 'ADMIN_VERIFY')}
-                              disabled={actionLoading}
-                              className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-xl transition flex items-center gap-1.5 shadow"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Admin Finalize Transfer</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {(isOldCaptain || isNewCaptain || isAdmin) && (
-                            <button
-                              onClick={() => setRejectTransfer(tr)}
-                              className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold rounded-xl transition flex items-center gap-1"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                              <span>Reject</span>
-                            </button>
-                          )}
-
-                          {(isPlayer || tr.requesterId === user?.id) && (
-                            <button
-                              onClick={() => handleAction(tr.id, 'CANCEL')}
-                              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold rounded-xl transition"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                    {tr.notes && (
+                      <p className="text-xs text-slate-400 italic bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                        &ldquo;{tr.notes}&rdquo;
+                      </p>
                     )}
+
+                    {/* Workflow Progress Badges */}
+                    <div className="flex flex-wrap gap-2 pt-1 text-[10px] font-bold">
+                      <span className={`px-2.5 py-1 rounded-lg border ${tr.payment?.status === 'VERIFIED' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-slate-800 bg-slate-800/60 text-slate-500'}`}>
+                        Payment: {tr.payment?.status || 'PENDING'}
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-lg border ${tr.releasingApproved ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-slate-800 bg-slate-800/60 text-slate-500'}`}>
+                        Origin NOC: {tr.releasingApproved ? 'GRANTED' : 'PENDING'}
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-lg border ${tr.receivingApproved ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-slate-800 bg-slate-800/60 text-slate-500'}`}>
+                        Target Acceptance: {tr.receivingApproved ? 'ACCEPTED' : 'PENDING'}
+                      </span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                      {/* Player Payment Action */}
+                      {isPlayer && tr.status === 'PENDING_PAYMENT' && (
+                        <button
+                          onClick={() => setPayTransfer(tr)}
+                          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>Pay Rs. 100 Transfer Fee</span>
+                        </button>
+                      )}
+
+                      {/* Origin Captain NOC Release */}
+                      {isReleasingCaptain && !tr.releasingApproved && tr.status === 'PENDING_APPROVAL' && (
+                        <button
+                          onClick={() => handleAction(tr.id, 'RELEASE_APPROVE')}
+                          disabled={actionLoading}
+                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer"
+                        >
+                          Grant Release NOC
+                        </button>
+                      )}
+
+                      {/* Target Captain Acceptance */}
+                      {isReceivingCaptain && tr.releasingApproved && !tr.receivingApproved && tr.status === 'PENDING_APPROVAL' && (
+                        <button
+                          onClick={() => handleAction(tr.id, 'RECEIVING_APPROVE')}
+                          disabled={actionLoading}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer"
+                        >
+                          Accept Player into Squad
+                        </button>
+                      )}
+
+                      {/* Admin Final Verification */}
+                      {isAdmin && tr.status === 'PENDING_APPROVAL' && tr.releasingApproved && tr.receivingApproved && (
+                        <button
+                          onClick={() => handleAction(tr.id, 'ADMIN_VERIFY')}
+                          disabled={actionLoading}
+                          className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition cursor-pointer shadow-lg shadow-purple-500/20"
+                        >
+                          Admin Execute Transfer
+                        </button>
+                      )}
+
+                      {/* Reject / Cancel */}
+                      {(isReleasingCaptain || isReceivingCaptain || isAdmin) && tr.status === 'PENDING_APPROVAL' && (
+                        <button
+                          onClick={() => setRejectTransfer(tr)}
+                          disabled={actionLoading}
+                          className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-bold text-xs transition cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -487,117 +526,110 @@ export default function TransfersPage() {
         </div>
       </div>
 
-      {/* Pay Rs. 100 Fee Modal */}
+      {/* Payment Proof Modal */}
       {payTransfer && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-white">Pay Official Transfer Fee</h3>
-              <button onClick={() => setPayTransfer(null)} className="text-slate-400 hover:text-white">&times;</button>
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-emerald-400" />
+                <span>Submit Rs. 100 Transfer Fee</span>
+              </h3>
+              <button onClick={() => setPayTransfer(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs space-y-1">
-              <div className="flex justify-between font-bold text-white">
-                <span>Fee Amount Due:</span>
-                <span className="text-purple-400 font-mono text-sm">PKR 100.00</span>
-              </div>
-              <p className="text-[11px] text-slate-300">
-                Transfer of {payTransfer.player?.fullName} to {payTransfer.newTeam?.name}
-              </p>
-            </div>
-
-            <form onSubmit={handlePayTransfer} className="space-y-4 text-xs">
+            <form onSubmit={handlePayTransfer} className="space-y-4">
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1.5">Payment Method</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['EASYPAISA', 'JAZZCASH', 'BANK_TRANSFER', 'CASH'].map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setPaymentMethod(method)}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition ${
-                        paymentMethod === method
-                          ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
-                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                      }`}
-                    >
-                      {method.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Payment Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold"
+                >
+                  <option value="EASYPAISA" className="bg-slate-900 text-white">EasyPaisa (0300-1234567)</option>
+                  <option value="JAZZCASH" className="bg-slate-900 text-white">JazzCash (0300-9876543)</option>
+                  <option value="BANK_TRANSFER" className="bg-slate-900 text-white">Meezan Bank (PK89MEZN001122)</option>
+                </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1.5">Transaction ID / Reference #</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Transaction ID / Reference</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. TRX-99881122"
                   value={transactionRef}
                   onChange={(e) => setTransactionRef(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-mono"
+                  placeholder="e.g. TRX-99882211"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-300 uppercase mb-1.5">Receipt / Screenshot URL (Optional)</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Receipt Screenshot URL (Optional)</label>
                 <input
                   type="url"
-                  placeholder="https://images.unsplash.com/..."
                   value={proofUrl}
                   onChange={(e) => setProofUrl(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs"
+                  placeholder="https://..."
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={submittingPayment || !transactionRef}
-                className="w-full py-3 bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs shadow-lg transition"
+                className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black rounded-xl text-xs shadow-lg transition cursor-pointer"
               >
-                {submittingPayment ? 'Submitting...' : 'Submit PKR 100 Proof &rarr;'}
+                {submittingPayment ? 'Submitting...' : 'Confirm & Upload Proof &rarr;'}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Rejection Modal */}
+      {/* Decline Modal */}
       {rejectTransfer && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-white">Decline Transfer Request</h3>
-              <button onClick={() => setRejectTransfer(null)} className="text-slate-400 hover:text-white">&times;</button>
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-black text-white text-rose-400">Decline Transfer Request</h3>
+              <button onClick={() => setRejectTransfer(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Please enter the official rationale for declining the transfer of {rejectTransfer.player?.fullName}.
-            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Decline Reason</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="State reason for declining transfer application..."
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-rose-500"
+                />
+              </div>
 
-            <textarea
-              rows={3}
-              required
-              placeholder="e.g. Roster limit reached, contractual commitment..."
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs"
-            />
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setRejectTransfer(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleAction(rejectTransfer.id, 'REJECT', rejectionReason)}
-                disabled={actionLoading || !rejectionReason}
-                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-black"
-              >
-                Confirm Rejection
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRejectTransfer(null)}
+                  className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAction(rejectTransfer.id, 'REJECT')}
+                  disabled={actionLoading || !rejectionReason}
+                  className="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-black cursor-pointer shadow-lg shadow-rose-600/20"
+                >
+                  Confirm Decline
+                </button>
+              </div>
             </div>
           </div>
         </div>
