@@ -5,28 +5,94 @@ import { isSuperAdmin } from '@/lib/rbac';
 import { createCitySchema } from '@/lib/validations';
 import { createAuditLog } from '@/services/audit-service';
 
+async function ensureDefaultCities() {
+  try {
+    let punjab = await prisma.province.findUnique({ where: { code: 'PUNJAB' } });
+    if (!punjab) {
+      punjab = await prisma.province.create({ data: { name: 'Punjab', code: 'PUNJAB' } });
+    }
+
+    let southPunjab = await prisma.region.findUnique({ where: { code: 'SOUTH_PUNJAB' } });
+    if (!southPunjab) {
+      southPunjab = await prisma.region.create({
+        data: { name: 'South Punjab', code: 'SOUTH_PUNJAB', provinceId: punjab.id },
+      });
+    }
+
+    const defaultCities = [
+      { name: 'Jampur', slug: 'jampur', code: 'JAM', desc: 'Historical sports hub in Rajanpur district.' },
+      { name: 'Dera Ghazi Khan', slug: 'dera-ghazi-khan', code: 'DGK', desc: 'Regional sports capital with premier stadiums.' },
+      { name: 'Rajanpur', slug: 'rajanpur', code: 'RAJ', desc: 'Fertile district home to volleyball and badminton clubs.' },
+      { name: 'Taunsa', slug: 'taunsa', code: 'TAU', desc: 'Renowned sports municipality in South Punjab.' },
+      { name: 'Multan', slug: 'multan', code: 'MUL', desc: 'Divisional sports capital with international facilities.' },
+      { name: 'Muzaffargarh', slug: 'muzaffargarh', code: 'MZG', desc: 'Active football, athletics, and snooker community.' },
+      { name: 'Layyah', slug: 'layyah', code: 'LAY', desc: 'Thriving agricultural hub with active sports associations.' },
+    ];
+
+    for (const c of defaultCities) {
+      const city = await prisma.city.upsert({
+        where: { code: c.code },
+        update: { isActive: true },
+        create: {
+          name: c.name,
+          slug: c.slug,
+          code: c.code,
+          description: c.desc,
+          regionId: southPunjab.id,
+          status: 'ACTIVE',
+          isActive: true,
+        },
+      });
+
+      await prisma.community.upsert({
+        where: { cityId: city.id },
+        update: { isActive: true },
+        create: {
+          cityId: city.id,
+          name: `${city.name} Sports Community`,
+          description: `Official digital hub for ${city.name}.`,
+          isActive: true,
+        },
+      });
+    }
+  } catch (err: any) {
+    console.error('[WARN] Auto-provisioning cities notice:', err?.message || err);
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const includeInactive = searchParams.get('includeInactive') === 'true';
 
-    const cities = await prisma.city.findMany({
-      where: includeInactive ? {} : { isActive: true },
-      include: {
-        region: { include: { province: true } },
-        community: true,
-        grounds: { where: { isActive: true } },
-        _count: {
-          select: {
-            teams: { where: { status: 'ACTIVE' } },
-            matches: true,
-            grounds: { where: { isActive: true } },
-            users: true,
-          },
+    const cityInclude = {
+      region: { include: { province: true } },
+      community: true,
+      grounds: { where: { isActive: true } },
+      _count: {
+        select: {
+          teams: { where: { status: 'ACTIVE' } },
+          matches: true,
+          grounds: { where: { isActive: true } },
+          users: true,
         },
       },
+    };
+
+    let cities = await prisma.city.findMany({
+      where: includeInactive ? {} : { isActive: true },
+      include: cityInclude,
       orderBy: { name: 'asc' },
     });
+
+    if (cities.length === 0) {
+      await ensureDefaultCities();
+      cities = await prisma.city.findMany({
+        where: includeInactive ? {} : { isActive: true },
+        include: cityInclude,
+        orderBy: { name: 'asc' },
+      });
+    }
 
     return NextResponse.json({ cities });
   } catch (error: any) {
@@ -67,7 +133,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Automatically provision Community hub when city is active
     if (city.isActive) {
       await prisma.community.upsert({
         where: { cityId: city.id },

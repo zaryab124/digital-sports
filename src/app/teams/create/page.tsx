@@ -6,12 +6,31 @@ import Link from 'next/link';
 import { Shield, Trophy, MapPin, DollarSign, CheckCircle2, ArrowRight, Upload, Phone, Mail, FileText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 
+const FALLBACK_CITIES = [
+  { id: 'jampur-city', name: 'Jampur', slug: 'jampur', code: 'JAM' },
+  { id: 'dgk-city', name: 'Dera Ghazi Khan', slug: 'dera-ghazi-khan', code: 'DGK' },
+  { id: 'rajanpur-city', name: 'Rajanpur', slug: 'rajanpur', code: 'RAJ' },
+  { id: 'taunsa-city', name: 'Taunsa', slug: 'taunsa', code: 'TAU' },
+  { id: 'multan-city', name: 'Multan', slug: 'multan', code: 'MUL' },
+  { id: 'muzaffargarh-city', name: 'Muzaffargarh', slug: 'muzaffargarh', code: 'MZG' },
+  { id: 'layyah-city', name: 'Layyah', slug: 'layyah', code: 'LAY' },
+];
+
+const FALLBACK_SPORTS = [
+  { id: 'cricket-sport', name: 'Cricket', slug: 'cricket', code: 'CRICKET', registrationFee: 1500 },
+  { id: 'football-sport', name: 'Football', slug: 'football', code: 'FOOTBALL', registrationFee: 1500 },
+  { id: 'volleyball-sport', name: 'Volleyball', slug: 'volleyball', code: 'VOLLEYBALL', registrationFee: 1000 },
+  { id: 'badminton-sport', name: 'Badminton', slug: 'badminton', code: 'BADMINTON', registrationFee: 500 },
+  { id: 'table-tennis-sport', name: 'Table Tennis', slug: 'table-tennis', code: 'TABLE_TENNIS', registrationFee: 500 },
+  { id: 'snooker-sport', name: 'Snooker', slug: 'snooker', code: 'SNOOKER', registrationFee: 500 },
+];
+
 export default function CreateTeamPage() {
   const router = useRouter();
   const [step, setStep] = useState<'DETAILS' | 'PAYMENT' | 'SUCCESS'>('DETAILS');
 
-  const [cities, setCities] = useState<any[]>([]);
-  const [sports, setSports] = useState<any[]>([]);
+  const [cities, setCities] = useState<any[]>(FALLBACK_CITIES);
+  const [sports, setSports] = useState<any[]>(FALLBACK_SPORTS);
   const [grounds, setGrounds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
