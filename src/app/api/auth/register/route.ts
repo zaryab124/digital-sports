@@ -5,6 +5,77 @@ import { registerSchema } from '@/lib/validations';
 import { createVerificationToken } from '@/lib/tokens';
 import { createAuditLog } from '@/services/audit-service';
 
+async function ensureRoles() {
+  const roleCodes = [
+    'SUPER_ADMIN',
+    'REGIONAL_ADMIN',
+    'CITY_ADMIN',
+    'SPORTS_ADMIN',
+    'OFFICIAL',
+    'CAPTAIN',
+    'PLAYER',
+    'FAN',
+  ];
+
+  for (const code of roleCodes) {
+    await prisma.role.upsert({
+      where: { code },
+      update: {},
+      create: {
+        name: code.replace(/_/g, ' '),
+        code,
+        description: `${code.replace(/_/g, ' ')} Role`,
+      },
+    });
+  }
+}
+
+async function resolveCity(homeCityId: string) {
+  let city = await prisma.city.findFirst({
+    where: {
+      OR: [
+        { id: homeCityId },
+        { code: homeCityId },
+        { slug: homeCityId },
+        { slug: homeCityId.replace('-city', '') },
+        { name: { contains: homeCityId.replace('-city', ''), mode: 'insensitive' } },
+      ],
+    },
+  });
+
+  if (!city) {
+    // Check if province & region exist
+    const punjab = await prisma.province.upsert({
+      where: { code: 'PUNJAB' },
+      update: {},
+      create: { name: 'Punjab', code: 'PUNJAB' },
+    });
+
+    const southPunjab = await prisma.region.upsert({
+      where: { code: 'SOUTH_PUNJAB' },
+      update: {},
+      create: { name: 'South Punjab', code: 'SOUTH_PUNJAB', provinceId: punjab.id },
+    });
+
+    // Create default Jampur city if none exists
+    city = await prisma.city.upsert({
+      where: { code: 'JAM' },
+      update: { isActive: true },
+      create: {
+        name: 'Jampur',
+        slug: 'jampur',
+        code: 'JAM',
+        description: 'Historical sports hub.',
+        regionId: southPunjab.id,
+        status: 'ACTIVE',
+        isActive: true,
+      },
+    });
+  }
+
+  return city;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -34,13 +105,16 @@ export async function POST(req: NextRequest) {
     } = validated.data;
 
     // Check email uniqueness
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existing) {
       return NextResponse.json({ error: 'An account with this email address already exists.' }, { status: 400 });
     }
 
-    // Check city
-    const city = await prisma.city.findUnique({ where: { id: homeCityId } });
+    // Ensure all system roles exist in DB
+    await ensureRoles();
+
+    // Check city with flexible resolution
+    const city = await resolveCity(homeCityId);
     if (!city) {
       return NextResponse.json({ error: 'Selected home city does not exist.' }, { status: 400 });
     }
@@ -55,15 +129,17 @@ export async function POST(req: NextRequest) {
     // Create User with Role Assignment
     const user = await prisma.user.create({
       data: {
-        email,
+        email: email.toLowerCase().trim(),
         passwordHash,
-        fullName,
-        phone,
-        cnic,
-        homeCityId,
+        fullName: fullName.trim(),
+        phone: phone || undefined,
+        cnic: cnic || undefined,
+        homeCityId: city.id,
         avatarUrl: avatarUrl || undefined,
+        status: 'ACTIVE',
+        isEmailVerified: true,
         userRoles: {
-          create: [{ roleId: role.id, cityId: homeCityId, sportId: primarySportId }],
+          create: [{ roleId: role.id, cityId: city.id, sportId: primarySportId }],
         },
       },
       include: {
@@ -113,14 +189,14 @@ export async function POST(req: NextRequest) {
       await prisma.fanProfile.create({
         data: {
           userId: user.id,
-          favoriteCityId: homeCityId,
+          favoriteCityId: city.id,
           favoriteSportId: primarySportId || undefined,
         },
       });
     }
 
     // Generate Verification Token
-    const verifyToken = await createVerificationToken(email, 'EMAIL_VERIFY');
+    const verifyToken = await createVerificationToken(user.email, 'EMAIL_VERIFY');
 
     const tokenPayload = {
       userId: user.id,
@@ -155,7 +231,7 @@ export async function POST(req: NextRequest) {
         homeCityId: user.homeCityId,
         roles: tokenPayload.roles,
       },
-      verificationCode: verifyToken, // Provided in development response for testing
+      verificationCode: verifyToken,
       token,
     });
 
