@@ -1,0 +1,460 @@
+      {/* TAB 3: TEAMS */}
+      {tab === 'TEAMS' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider">All Squads & Clubs ({teams.length})</h3>
+          <div className="space-y-3 text-xs">
+            {teams.map((t) => (
+              <div key={t.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-white text-sm">{t.name}</span>
+                    <Badge variant="blue">{t.code}</Badge>
+                    <Badge variant={t.status === 'ACTIVE' ? 'green' : t.status === 'REJECTED' ? 'red' : 'gold'}>{t.status}</Badge>
+                  </div>
+                  <span className="text-slate-400 block">
+                    City: <strong className="text-slate-200">{t.city?.name}</strong> &bull; Sport: <strong className="text-slate-200">{t.sport?.name}</strong> &bull; Captain: <strong className="text-slate-200">{t.captain?.fullName}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {t.status !== 'ACTIVE' && (
+                    <button
+                      onClick={() => handleTeamAction(t.id, 'APPROVE')}
+                      className="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs hover:bg-emerald-400"
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {t.status !== 'REJECTED' && (
+                    <button
+                      onClick={() => handleTeamAction(t.id, 'REJECT', 'Admin rejected')}
+                      className="px-3 py-1.5 bg-rose-500/20 text-rose-400 font-black rounded-xl text-xs hover:bg-rose-500/30"
+                    >
+                      Reject
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: MATCHES */}
+      {tab === 'MATCHES' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider">All Matches & Sanctions ({matches.length})</h3>
+          <div className="space-y-3 text-xs">
+            {matches.map((m) => (
+              <div key={m.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white">{m.homeTeam?.name} vs {m.awayTeam?.name}</span>
+                    <Badge variant={m.isLocked ? 'gold' : 'blue'}>{m.status}</Badge>
+                    {m.isLocked && <Badge variant="green">🔒 Locked</Badge>}
+                  </div>
+                  <span className="text-slate-400 block">{m.city?.name} &bull; {m.sport?.name} &bull; Score: {m.homeScore ?? '-'} - {m.awayScore ?? '-'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {m.status === 'PENDING_ADMIN_APPROVAL' && (
+                    <button
+                      onClick={() => handleMatchAction(m.id, 'APPROVE')}
+                      className="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs hover:bg-emerald-400"
+                    >
+                      Sanction
+                    </button>
+                  )}
+                  {m.isLocked ? (
+                    <button
+                      onClick={() => handleMatchAction(m.id, 'UNLOCK')}
+                      className="px-3 py-1.5 bg-amber-500/20 text-amber-400 font-black rounded-xl text-xs hover:bg-amber-500/30"
+                    >
+                      Unlock
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleMatchAction(m.id, 'LOCK')}
+                      className="px-3 py-1.5 bg-purple-500/20 text-purple-400 font-black rounded-xl text-xs hover:bg-purple-500/30"
+                    >
+                      Lock Result
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: PAYMENTS */}
+      {tab === 'PAYMENTS' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider">Financial Transactions ({payments.length})</h3>
+          <div className="space-y-3 text-xs">
+            {payments.map((p) => (
+              <div key={p.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-white font-mono text-sm">Rs. {p.amount}</span>
+                    <Badge variant="purple">{p.feeType}</Badge>
+                    <Badge variant={p.status === 'VERIFIED' ? 'green' : p.status === 'REJECTED' ? 'red' : 'gold'}>{p.status}</Badge>
+                  </div>
+                  <span className="text-slate-400 block font-mono">
+                    Method: {p.paymentMethod} &bull; TrxID: {p.transactionRef || 'N/A'}
+                  </span>
+                </div>
+                {p.status === 'PENDING' || p.status === 'SUBMITTED' ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePaymentVerify(p.id, 'VERIFIED')}
+                      className="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs hover:bg-emerald-400"
+                    >
+                      Verify
+                    </button>
+                    <button
+                      onClick={() => handlePaymentVerify(p.id, 'REJECTED')}
+                      className="px-3 py-1.5 bg-rose-500/20 text-rose-400 font-black rounded-xl text-xs hover:bg-rose-500/30"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: TRANSFERS */}
+      {tab === 'TRANSFERS' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider">Player Transfers ({transfers.length})</h3>
+          <div className="space-y-3 text-xs">
+            {transfers.map((tr) => (
+              <div key={tr.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="font-bold text-white block">{tr.player?.fullName}: {tr.fromTeam?.name} &rarr; {tr.toTeam?.name}</span>
+                  <span className="text-slate-400 block">{tr.city?.name} &bull; {tr.sport?.name} &bull; Fee: Rs. {tr.feeAmount}</span>
+                </div>
+                <Badge variant={tr.status === 'COMPLETED' ? 'green' : tr.status === 'REJECTED' ? 'red' : 'gold'}>{tr.status}</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: PHOTOS */}
+      {tab === 'PHOTOS' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider">Photo Moderation Queue ({photos.length})</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            {photos.map((ph) => (
+              <div key={ph.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-3 flex flex-col justify-between">
+                <div className="aspect-video w-full rounded-xl bg-slate-800 overflow-hidden">
+                  <img src={ph.photoUrl} alt="Match victory" className="w-full h-full object-cover" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white">{ph.team?.name}</span>
+                    <Badge variant={ph.status === 'APPROVED' ? 'green' : ph.status === 'REJECTED' ? 'red' : 'gold'}>{ph.status}</Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{ph.caption}</p>
+                </div>
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-end gap-2">
+                  {ph.status !== 'APPROVED' && (
+                    <button
+                      onClick={() => handlePhotoAction(ph.id, 'APPROVE')}
+                      className="px-3 py-1 bg-emerald-500 text-slate-950 font-bold rounded-lg"
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {ph.status !== 'REJECTED' && (
+                    <button
+                      onClick={() => handlePhotoAction(ph.id, 'REJECT')}
+                      className="px-3 py-1 bg-rose-500/20 text-rose-400 font-bold rounded-lg"
+                    >
+                      Reject
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 8: CITIES */}
+      {tab === 'CITIES' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <Plus className="w-4 h-4 text-emerald-400" />
+              <span>Create Dynamic City</span>
+            </h3>
+            <form onSubmit={handleAddCity} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+              <input
+                type="text"
+                placeholder="City Name"
+                value={newCityName}
+                onChange={(e) => setNewCityName(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Slug"
+                value={newCitySlug}
+                onChange={(e) => setNewCitySlug(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+              />
+              <input
+                type="text"
+                placeholder="Code (e.g. KHP)"
+                value={newCityCode}
+                onChange={(e) => setNewCityCode(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+                required
+              />
+              <select
+                value={selectedRegionId}
+                onChange={(e) => setSelectedRegionId(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white"
+              >
+                {regions.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name} ({r.province?.name})</option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow transition"
+              >
+                + Add City
+              </button>
+            </form>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {cities.map((c) => (
+              <div key={c.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-white text-sm">{c.name}</span>
+                  <Badge variant="blue">{c.code}</Badge>
+                </div>
+                <span className="text-slate-400 block">{c.region?.name} &bull; {c.region?.province?.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 9: SPORTS */}
+      {tab === 'SPORTS' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <Plus className="w-4 h-4 text-emerald-400" />
+              <span>Create Dynamic Sport</span>
+            </h3>
+            <form onSubmit={handleAddSport} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <input
+                type="text"
+                placeholder="Sport Name"
+                value={newSportName}
+                onChange={(e) => setNewSportName(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Sport Code"
+                value={newSportCode}
+                onChange={(e) => setNewSportCode(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+                required
+              />
+              <input
+                type="number"
+                placeholder="Registration Fee (PKR)"
+                value={newSportFee}
+                onChange={(e) => setNewSportFee(Number(e.target.value))}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+              />
+              <button
+                type="submit"
+                className="py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow transition"
+              >
+                + Add Sport
+              </button>
+            </form>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {sports.map((s) => (
+              <div key={s.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-white text-sm">{s.icon || '🏅'} {s.name}</span>
+                  <Badge variant="green">Rs. {s.registrationFee}</Badge>
+                </div>
+                <span className="text-slate-400 block">{s.isTeamSport ? 'Team Sport' : 'Individual Sport'} &bull; {s.playersPerTeam} Players</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 10: RANKINGS & RULES */}
+      {tab === 'RANKINGS' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span>Configurable Ranking Rules ({rankingRules.length})</span>
+            </h3>
+            <button
+              onClick={() => handleRecalculateRankings()}
+              className="px-4 py-2 bg-amber-400 text-slate-950 font-black rounded-xl text-xs shadow"
+            >
+              Trigger Full Recalculation
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            {rankingRules.map((r) => (
+              <div key={r.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-2">
+                <span className="font-black text-white block text-sm">{r.sport?.name}</span>
+                <div className="grid grid-cols-3 gap-1 text-center font-mono text-[11px] pt-1">
+                  <div className="p-1.5 rounded-lg bg-emerald-950/40 text-emerald-400">Win: {r.winPoints}p</div>
+                  <div className="p-1.5 rounded-lg bg-slate-900 text-slate-300">Draw: {r.drawPoints}p</div>
+                  <div className="p-1.5 rounded-lg bg-rose-950/40 text-rose-400">Loss: {r.lossPoints}p</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 11: NOTIFICATIONS BROADCAST */}
+      {tab === 'NOTIFICATIONS' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            <Send className="w-4 h-4 text-emerald-400" />
+            <span>Broadcast Platform Announcement</span>
+          </h3>
+
+          <form onSubmit={handleBroadcastNotification} className="space-y-4 text-xs max-w-xl">
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Announcement Title</label>
+              <input
+                type="text"
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                placeholder="e.g. South Punjab Championship Registration Open"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Target Municipal Scope</label>
+              <select
+                value={broadcastCityId}
+                onChange={(e) => setBroadcastCityId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+              >
+                <option value="">-- Broadcast to All Cities across South Punjab --</option>
+                {cities.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} Sports Community Only</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Broadcast Message Content</label>
+              <textarea
+                rows={4}
+                value={broadcastMessage}
+                onChange={(e) => setBroadcastMessage(e.target.value)}
+                placeholder="Details of the announcement..."
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="py-3 px-6 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow transition"
+            >
+              Dispatch Broadcast to Users &rarr;
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* TAB 12: SYSTEM SETTINGS */}
+      {tab === 'SETTINGS' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <span>Configurable Fees (No Hardcoding)</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+              {fees.map((f) => (
+                <div key={f.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-2">
+                  <span className="font-bold text-white block">{f.feeType}</span>
+                  <span className="text-slate-400 block">{f.description}</span>
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="number"
+                      defaultValue={f.amount}
+                      onBlur={(e) => handleUpdateFee(f.id, parseFloat(e.target.value))}
+                      className="w-28 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 font-mono font-bold text-emerald-400"
+                    />
+                    <span className="text-slate-400">PKR</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 13: AUDIT LOGS */}
+      {tab === 'AUDIT' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" />
+            <span>Platform Security Audit Trail ({auditLogs.length})</span>
+          </h3>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase">
+                  <th className="py-3 px-3">Timestamp</th>
+                  <th className="py-3 px-3">Actor</th>
+                  <th className="py-3 px-3">Action</th>
+                  <th className="py-3 px-3">Entity</th>
+                  <th className="py-3 px-3">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-800/40">
+                    <td className="py-3 px-3 font-mono text-slate-500">{new Date(log.createdAt).toLocaleString()}</td>
+                    <td className="py-3 px-3 font-bold text-white">{log.user?.fullName || 'System'}</td>
+                    <td className="py-3 px-3">
+                      <Badge variant="blue">{log.action}</Badge>
+                    </td>
+                    <td className="py-3 px-3 font-mono text-slate-400">{log.entityType} ({log.entityId?.slice(0, 8)})</td>
+                    <td className="py-3 px-3 text-slate-300 font-mono truncate max-w-xs">{log.changesJson}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,224 @@
+      {/* Navigation Modules Bar */}
+      <div className="flex flex-wrap items-center gap-2 p-2 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-black">
+        {[
+          { id: 'OVERVIEW', label: '1. Overview' },
+          { id: 'USERS', label: `2. Users (${users.length})` },
+          { id: 'TEAMS', label: `3. Teams (${teams.length})` },
+          { id: 'MATCHES', label: `4. Matches (${matches.length})` },
+          { id: 'PAYMENTS', label: `5. Payments (${payments.length})` },
+          { id: 'TRANSFERS', label: `6. Transfers (${transfers.length})` },
+          { id: 'PHOTOS', label: `7. Photos (${photos.length})` },
+          { id: 'CITIES', label: `8. Cities (${cities.length})` },
+          { id: 'SPORTS', label: `9. Sports (${sports.length})` },
+          { id: 'RANKINGS', label: '10. Ranking Rules' },
+          { id: 'NOTIFICATIONS', label: '11. Broadcast' },
+          { id: 'SETTINGS', label: '12. System Settings' },
+          { id: 'AUDIT', label: '13. Audit Trail' },
+        ].map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setTab(item.id as any)}
+            className={`px-3 py-2 rounded-xl transition ${tab === item.id ? 'bg-emerald-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {/* TAB 1: OVERVIEW & PENDING QUEUES */}
+      {tab === 'OVERVIEW' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Pending Team Registrations Queue */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  <span>Pending Team Approvals</span>
+                </span>
+                <Badge variant="gold">
+                  {teams.filter((t) => t.status === 'PENDING_APPROVAL' || t.status === 'PAYMENT_SUBMITTED').length} Pending
+                </Badge>
+              </h3>
+
+              <div className="space-y-3 text-xs">
+                {teams.filter((t) => t.status === 'PENDING_APPROVAL' || t.status === 'PAYMENT_SUBMITTED').length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">No teams currently awaiting approval.</div>
+                ) : (
+                  teams
+                    .filter((t) => t.status === 'PENDING_APPROVAL' || t.status === 'PAYMENT_SUBMITTED')
+                    .slice(0, 5)
+                    .map((t) => (
+                      <div key={t.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between">
+                        <div className="space-y-1">
+                          <span className="font-bold text-white block">{t.name} ({t.code})</span>
+                          <span className="text-slate-400 block">{t.city?.name} &bull; {t.sport?.name} &bull; Cap: {t.captain?.fullName}</span>
+                          <Badge variant="blue">{t.status}</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleTeamAction(t.id, 'APPROVE')}
+                            className="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs hover:bg-emerald-400"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleTeamAction(t.id, 'REJECT', 'Rejected by admin')}
+                            className="px-3 py-1.5 bg-rose-500/20 text-rose-400 font-black rounded-xl text-xs hover:bg-rose-500/30"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+
+            {/* Pending Match Sanctions Queue */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-purple-400" />
+                  <span>Pending Match Sanctions</span>
+                </span>
+                <Badge variant="purple">
+                  {matches.filter((m) => m.status === 'PENDING_ADMIN_APPROVAL').length} Pending
+                </Badge>
+              </h3>
+
+              <div className="space-y-3 text-xs">
+                {matches.filter((m) => m.status === 'PENDING_ADMIN_APPROVAL').length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">No match challenges awaiting admin sanction.</div>
+                ) : (
+                  matches
+                    .filter((m) => m.status === 'PENDING_ADMIN_APPROVAL')
+                    .slice(0, 5)
+                    .map((m) => (
+                      <div key={m.id} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between">
+                        <div className="space-y-1">
+                          <span className="font-bold text-white block">{m.homeTeam?.name} vs {m.awayTeam?.name}</span>
+                          <span className="text-slate-400 block">{m.city?.name} &bull; {m.sport?.name} &bull; Venue: {m.ground?.name || 'TBD'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleMatchAction(m.id, 'APPROVE')}
+                            className="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs hover:bg-emerald-400"
+                          >
+                            Sanction
+                          </button>
+                          <button
+                            onClick={() => handleMatchAction(m.id, 'REJECT')}
+                            className="px-3 py-1.5 bg-rose-500/20 text-rose-400 font-black rounded-xl text-xs hover:bg-rose-500/30"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: USERS & ROLES */}
+      {tab === 'USERS' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" />
+              <span>Assign Administrative / Official Role</span>
+            </h3>
+
+            <form onSubmit={handleAssignRole} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+              <select
+                value={assignUserId}
+                onChange={(e) => setAssignUserId(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+                required
+              >
+                <option value="">-- Choose User --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.fullName} ({u.email})</option>
+                ))}
+              </select>
+
+              <select
+                value={assignRoleCode}
+                onChange={(e) => setAssignRoleCode(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold"
+              >
+                <option value="SUPER_ADMIN">SUPER_ADMIN (Global)</option>
+                <option value="CITY_ADMIN">CITY_ADMIN (Municipal)</option>
+                <option value="REGIONAL_ADMIN">REGIONAL_ADMIN (Division)</option>
+                <option value="OFFICIAL">OFFICIAL (Scorer/Ref)</option>
+                <option value="CAPTAIN">CAPTAIN</option>
+                <option value="PLAYER">PLAYER</option>
+              </select>
+
+              <select
+                value={assignCityId}
+                onChange={(e) => setAssignCityId(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white"
+              >
+                <option value="">-- Municipal Scope (Optional) --</option>
+                {cities.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={assignSportId}
+                onChange={(e) => setAssignSportId(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white"
+              >
+                <option value="">-- Sport Scope (Optional) --</option>
+                {sports.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+
+              <button
+                type="submit"
+                className="py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl shadow transition"
+              >
+                Assign Role &rarr;
+              </button>
+            </form>
+          </div>
+
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider">All Registered Users ({users.length})</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase">
+                    <th className="py-3 px-3">Name</th>
+                    <th className="py-3 px-3">Email</th>
+                    <th className="py-3 px-3">Home City</th>
+                    <th className="py-3 px-3">Assigned Roles</th>
+                    <th className="py-3 px-3">Joined</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-800/40">
+                      <td className="py-3 px-3 font-bold text-white">{u.fullName}</td>
+                      <td className="py-3 px-3 font-mono text-slate-400">{u.email}</td>
+                      <td className="py-3 px-3 text-slate-300">{u.homeCity?.name || 'Unassigned'}</td>
+                      <td className="py-3 px-3 flex flex-wrap gap-1">
+                        {u.userRoles?.map((ur: any) => (
+                          <Badge key={ur.id} variant="blue">{ur.role?.code}</Badge>
+                        ))}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 font-mono">{new Date(u.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}

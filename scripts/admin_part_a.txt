@@ -1,0 +1,330 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+  Settings, Shield, MapPin, DollarSign, CheckCircle, Clock, Activity,
+  AlertCircle, Trophy, Plus, ArrowRight, Users, Award, Calendar,
+  CreditCard, Repeat, RefreshCw, Eye, Lock, Unlock, Check, X,
+  FileText, Search, Bell, Camera, Filter, AlertTriangle, Sparkles, Send
+} from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+
+export default function SuperAdminDashboardPage() {
+  const [overview, setOverview] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [rolesList, setRolesList] = useState<any[]>([]);
+  const [cities, setCities] = useState<any[]>([]);
+  const [regions, setRegions] = useState<any[]>([]);
+  const [sports, setSports] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [fees, setFees] = useState<any[]>([]);
+  const [rankingRules, setRankingRules] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Active Navigation Tab
+  const [tab, setTab] = useState<
+    'OVERVIEW' | 'USERS' | 'CITIES' | 'SPORTS' | 'TEAMS' | 'MATCHES' |
+    'PAYMENTS' | 'TRANSFERS' | 'PHOTOS' | 'RANKINGS' | 'NOTIFICATIONS' | 'SETTINGS' | 'AUDIT'
+  >('OVERVIEW');
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Role Assignment State
+  const [assignUserId, setAssignUserId] = useState('');
+  const [assignRoleCode, setAssignRoleCode] = useState('CITY_ADMIN');
+  const [assignCityId, setAssignCityId] = useState('');
+  const [assignSportId, setAssignSportId] = useState('');
+
+  // City form states
+  const [newCityName, setNewCityName] = useState('');
+  const [newCitySlug, setNewCitySlug] = useState('');
+  const [newCityCode, setNewCityCode] = useState('');
+  const [newCityDesc, setNewCityDesc] = useState('');
+  const [selectedRegionId, setSelectedRegionId] = useState('');
+
+  // Sport form states
+  const [newSportName, setNewSportName] = useState('');
+  const [newSportSlug, setNewSportSlug] = useState('');
+  const [newSportCode, setNewSportCode] = useState('');
+  const [newSportIcon, setNewSportIcon] = useState('🏏');
+  const [newSportCatId, setNewSportCatId] = useState('');
+  const [newSportRegType, setNewSportRegType] = useState('TEAM');
+  const [newSportFee, setNewSportFee] = useState(1000);
+  const [newSportPlayers, setNewSportPlayers] = useState(11);
+  const [newSportMinPlayers, setNewSportMinPlayers] = useState(7);
+  const [newSportIsTeam, setNewSportIsTeam] = useState(true);
+
+  // Broadcast Notification State
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastCityId, setBroadcastCityId] = useState('');
+  const [broadcastType, setBroadcastType] = useState('INFO');
+
+  useEffect(() => {
+    loadAllAdminData();
+  }, []);
+
+  const loadAllAdminData = async () => {
+    setLoading(true);
+    try {
+      const [
+        ovRes, usRes, ciRes, reRes, spRes, tmRes, maRes, paRes, trRes, phRes, feRes, rrRes, auRes
+      ] = await Promise.all([
+        fetch('/api/admin/overview').then((r) => r.json()),
+        fetch('/api/admin/users').then((r) => r.json()),
+        fetch('/api/cities?includeInactive=true').then((r) => r.json()),
+        fetch('/api/regions').then((r) => r.json()),
+        fetch('/api/sports?includeInactive=true').then((r) => r.json()),
+        fetch('/api/admin/teams').then((r) => r.json()),
+        fetch('/api/admin/matches').then((r) => r.json()),
+        fetch('/api/payments').then((r) => r.json()),
+        fetch('/api/admin/transfers').then((r) => r.json()),
+        fetch('/api/admin/photos').then((r) => r.json()),
+        fetch('/api/admin/fees').then((r) => r.json()),
+        fetch('/api/admin/ranking-rules').then((r) => r.json()),
+        fetch('/api/admin/audit-logs').then((r) => r.json()),
+      ]);
+
+      setOverview(ovRes);
+      setUsers(usRes.users || []);
+      setRolesList(usRes.roles || []);
+      setCities(ciRes.cities || []);
+      setRegions(reRes.regions || []);
+      setSports(spRes.sports || []);
+      setTeams(tmRes.teams || []);
+      setMatches(maRes.matches || []);
+      setPayments(paRes.payments || []);
+      setTransfers(trRes.transfers || []);
+      setPhotos(phRes.photos || []);
+      setFees(feRes.fees || []);
+      setRankingRules(rrRes.rules || []);
+      setAuditLogs(auRes.auditLogs || []);
+
+      if (reRes.regions?.length) setSelectedRegionId(reRes.regions[0].id);
+      if (spRes.sports?.length && spRes.sports[0].categoryId) {
+        setNewSportCatId(spRes.sports[0].categoryId);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAssignRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignUserId || !assignRoleCode) return;
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: assignUserId,
+          roleCode: assignRoleCode,
+          cityId: assignCityId || undefined,
+          sportId: assignSportId || undefined,
+        }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        alert('Role assigned successfully.');
+        setAssignUserId('');
+        loadAllAdminData();
+      } else {
+        alert(d.error || 'Failed to assign role');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleTeamAction = async (teamId: string, action: 'APPROVE' | 'REJECT', reason?: string) => {
+    try {
+      const res = await fetch('/api/admin/teams', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, action, reason }),
+      });
+      if (res.ok) {
+        alert(`Team ${action === 'APPROVE' ? 'Approved' : 'Rejected'} successfully.`);
+        loadAllAdminData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleMatchAction = async (matchId: string, action: 'APPROVE' | 'REJECT' | 'LOCK' | 'UNLOCK') => {
+    try {
+      const res = await fetch('/api/admin/matches', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId, action }),
+      });
+      if (res.ok) {
+        alert(`Match action ${action} executed successfully.`);
+        loadAllAdminData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handlePaymentVerify = async (paymentId: string, status: 'VERIFIED' | 'REJECTED') => {
+    try {
+      const res = await fetch(`/api/payments/${paymentId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        alert(`Payment marked as ${status}`);
+        loadAllAdminData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handlePhotoAction = async (photoId: string, action: 'APPROVE' | 'REJECT' | 'DELETE') => {
+    try {
+      const res = await fetch(`/api/community/photos/${photoId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        alert(`Photo action ${action} completed.`);
+        loadAllAdminData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleBroadcastNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: broadcastTitle,
+          message: broadcastMessage,
+          type: broadcastType,
+          targetCityId: broadcastCityId || undefined,
+        }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        alert(d.message || 'Notification broadcasted successfully.');
+        setBroadcastTitle('');
+        setBroadcastMessage('');
+      } else {
+        alert(d.error || 'Broadcast failed');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleUpdateFee = async (feeId: string, amount: number) => {
+    try {
+      const res = await fetch('/api/admin/fees', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: feeId, amount }),
+      });
+      if (res.ok) {
+        alert('Fee configuration updated.');
+        loadAllAdminData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRecalculateRankings = async (sportId?: string) => {
+    try {
+      const res = await fetch('/api/admin/ranking-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sportId }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        alert(d.message || 'Rankings recalculated successfully.');
+        loadAllAdminData();
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddCity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCityName,
+          slug: newCitySlug || undefined,
+          code: newCityCode.toUpperCase(),
+          regionId: selectedRegionId,
+          description: newCityDesc || undefined,
+          isActive: true,
+          status: 'ACTIVE',
+        }),
+      });
+      if (res.ok) {
+        setNewCityName('');
+        setNewCitySlug('');
+        setNewCityCode('');
+        setNewCityDesc('');
+        loadAllAdminData();
+        alert('City created successfully.');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddSport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/sports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newSportName,
+          slug: newSportSlug || undefined,
+          code: newSportCode.toUpperCase(),
+          icon: newSportIcon,
+          categoryId: newSportCatId || (sports[0]?.categoryId),
+          registrationType: newSportRegType,
+          registrationFee: parseFloat(String(newSportFee)),
+          playersPerTeam: parseInt(String(newSportPlayers)),
+          minPlayersRequired: parseInt(String(newSportMinPlayers)),
+          isTeamSport: newSportIsTeam,
+          isActive: true,
+        }),
+      });
+      if (res.ok) {
+        setNewSportName('');
+        setNewSportSlug('');
+        setNewSportCode('');
+        loadAllAdminData();
+        alert('Sport created successfully.');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };

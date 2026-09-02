@@ -1,0 +1,210 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import {
+  Activity, Shield, Trophy, CheckCircle, Lock, Plus, User,
+  AlertCircle, Clock, MapPin, Camera, Trash2, Check, Play,
+  RotateCcw, Sparkles, ArrowLeft
+} from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+
+export default function DigitalScorebookPage() {
+  const params = useParams();
+  const matchId = params?.id as string;
+
+  const [match, setMatch] = useState<any>(null);
+  const [scorebook, setScorebook] = useState<any>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const [permissions, setPermissions] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+
+  // Tabs: 'PRE_MATCH' | 'SCORING' | 'LOG' | 'FINALIZE'
+  const [activeTab, setActiveTab] = useState('SCORING');
+
+  // Pre-Match Inputs
+  const [groundConfirmed, setGroundConfirmed] = useState(true);
+  const [pitchCondition, setPitchCondition] = useState('Dry turf pitch, boundary markings confirmed');
+  const [tossWinnerTeamId, setTossWinnerTeamId] = useState('');
+  const [tossDecision, setTossDecision] = useState('BAT');
+
+  // Scoring Inputs
+  const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [secondaryPlayerId, setSecondaryPlayerId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Post-match Inputs
+  const [summaryNotes, setSummaryNotes] = useState('');
+  const [evidencePhotoUrl, setEvidencePhotoUrl] = useState('');
+  const [mvpPlayerId, setMvpPlayerId] = useState('');
+
+  useEffect(() => {
+    if (matchId) loadData();
+  }, [matchId]);
+
+  const loadData = async () => {
+    try {
+      const [mRes, meRes] = await Promise.all([
+        fetch('/api/matches/' + matchId).then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()),
+      ]);
+
+      if (mRes.match) {
+        setMatch(mRes.match);
+        setScorebook(mRes.match.scorebook);
+        setEvents(mRes.match.scoreEvents || []);
+        setPermissions(mRes.permissions || {});
+        setUser(meRes.user);
+
+        if (!selectedTeamId && mRes.match.homeTeamId) {
+          setSelectedTeamId(mRes.match.homeTeamId);
+          setTossWinnerTeamId(mRes.match.homeTeamId);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePreMatchSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const participants = [
+        ...(match.homeTeam?.members || []).map((m: any) => ({
+          teamId: match.homeTeamId,
+          playerId: m.playerId,
+          isStarting: true,
+          jerseyNumber: m.jerseyNumber,
+        })),
+        ...(match.awayTeam?.members || []).map((m: any) => ({
+          teamId: match.awayTeamId,
+          playerId: m.playerId,
+          isStarting: true,
+          jerseyNumber: m.jerseyNumber,
+        })),
+      ];
+
+      const res = await fetch('/api/scorebook/' + matchId + '/prematch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamsVerified: true,
+          groundConfirmed,
+          pitchCondition,
+          tossWinnerTeamId,
+          tossDecision,
+          participants,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to complete pre-match verification');
+
+      alert('Pre-match verified! Live scoring session active.');
+      setActiveTab('SCORING');
+      loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const logScoreEvent = async (eventType: string, extraDetails: any = {}) => {
+    if (match.isLocked) {
+      alert('This match is officially locked.');
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType,
+          teamId: selectedTeamId || match.homeTeamId,
+          playerId: selectedPlayerId || undefined,
+          detailsJson: JSON.stringify({
+            ...extraDetails,
+            bowlerId: secondaryPlayerId || undefined,
+            assistPlayerId: secondaryPlayerId || undefined,
+          }),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to log score event');
+
+      loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRevertEvent = async (eventId: string) => {
+    if (!confirm('Undo this score event? This will update the scoreboard and create an audit log entry.')) return;
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/events/' + eventId, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        loadData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to revert event');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handlePostMatchSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summaryNotes,
+          evidencePhotoUrl: evidencePhotoUrl || undefined,
+          mvpPlayerId: mvpPlayerId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit scorebook');
+
+      alert(data.message);
+      loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerifyAndLock = async () => {
+    if (!confirm('Officially verify and lock this match? This will lock the scorebook against any edits, process player stats, and update municipal rankings.')) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/verify', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        loadData();
+      } else {
+        alert(data.error || 'Verification failed');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };

@@ -1,0 +1,885 @@
+import os
+
+def write_file(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content.strip() + '\n')
+    print('[OK] Updated schema:', path)
+
+schema_content = """datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// 1. Geography Hierarchy
+// -------------------------------------------------------------
+
+model Province {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  regions   Region[]
+}
+
+model Region {
+  id         String   @id @default(uuid())
+  provinceId String
+  name       String
+  code       String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  province   Province @relation(fields: [provinceId], references: [id], onDelete: Cascade)
+  cities     City[]
+  userRoles  UserRole[]
+  playerRankings PlayerRanking[]
+  teamRankings   TeamRanking[]
+
+  @@index([provinceId])
+}
+
+model City {
+  id         String   @id @default(uuid())
+  regionId   String
+  name       String
+  code       String   @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  region     Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  community  Community?
+  grounds    Ground[]
+  users      User[]   @relation("UserHomeCity")
+  teams      Team[]
+  matches    Match[]
+  transfers  PlayerTransfer[]
+  userRoles  UserRole[]
+  playerRankings PlayerRanking[]
+  teamRankings   TeamRanking[]
+  matchPhotos    MatchPhoto[]
+  payments       Payment[]
+  feeConfigs     FeeConfiguration[]
+
+  @@index([regionId])
+}
+
+model Community {
+  id          String   @id @default(uuid())
+  cityId      String   @unique
+  name        String
+  description String?
+  bannerUrl   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  city        City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  posts       CommunityPost[]
+}
+
+model Ground {
+  id              String   @id @default(uuid())
+  cityId          String
+  name            String
+  address         String
+  latitude        Float?
+  longitude       Float?
+  sportsSupported String   // JSON array or comma separated list of sport codes
+  capacity        Int?     @default(500)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  city            City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  matches         Match[]
+
+  @@index([cityId])
+}
+
+// -------------------------------------------------------------
+// 2. User, Profiles & RBAC Hierarchy
+// -------------------------------------------------------------
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  cnic             String?
+  homeCityId       String
+  avatarUrl        String?
+  isEmailVerified  Boolean   @default(false)
+  isPhoneVerified  Boolean   @default(false)
+  lastLoginAt      DateTime?
+  status           String    @default("ACTIVE") // ACTIVE, SUSPENDED, PENDING
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  homeCity         City      @relation("UserHomeCity", fields: [homeCityId], references: [id], onDelete: Restrict)
+  userRoles        UserRole[]
+  playerProfile    PlayerProfile?
+  captainProfile   CaptainProfile?
+  officialProfile  OfficialProfile?
+  fanProfile       FanProfile?
+  adminProfile     AdminProfile?
+  passwordResets   PasswordResetToken[]
+
+  captainedTeams   Team[]              @relation("TeamCaptain")
+  teamMemberships  TeamMember[]
+  teamInvitationsReceived TeamInvitation[] @relation("PlayerInvitations")
+  teamInvitationsSent     TeamInvitation[] @relation("SentInvitations")
+  teamRequests     TeamRequest[]
+  transfersAsPlayer PlayerTransfer[]  @relation("PlayerTransfers")
+  transfersApproved PlayerTransfer[]  @relation("TransferApprover")
+
+  matchesRequested Match[]            @relation("MatchRequester")
+  matchesLocked    Match[]            @relation("MatchLocker")
+  matchParticipants MatchParticipant[]
+  matchOfficialAssignments MatchOfficial[]
+
+  scorebooksSubmitted Scorebook[]     @relation("ScorebookSubmitter")
+  scorebooksVerified  Scorebook[]     @relation("ScorebookVerifier")
+  
+  payments            Payment[]       @relation("UserPayments")
+  paymentsVerified    Payment[]       @relation("PaymentVerifier")
+  paymentVerifications PaymentVerification[]
+
+  notifications       Notification[]
+  posts               CommunityPost[]
+  photosUploaded      MatchPhoto[]    @relation("PhotoUploader")
+  photosModerated     MatchPhoto[]    @relation("PhotoModerator")
+  auditLogs           AuditLog[]
+
+  @@index([homeCityId])
+  @@index([email])
+}
+
+model VerificationToken {
+  id         String   @id @default(uuid())
+  identifier String   // email or phone
+  token      String   @unique
+  type       String   // EMAIL_VERIFY, PHONE_VERIFY
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, type])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  code        String   @unique // SUPER_ADMIN, REGIONAL_ADMIN, CITY_ADMIN, SPORTS_ADMIN, OFFICIAL, CAPTAIN, PLAYER, FAN
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+
+  userRoles   UserRole[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  regionId  String?
+  cityId    String?
+  sportId   String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  region    Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  city      City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  sport     Sport?   @relation(fields: [sportId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, roleId, regionId, cityId, sportId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model PlayerProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  primarySportId      String?
+  secondarySportsJson String?  // JSON array of sport IDs/codes
+  jerseyNumber        Int?
+  position            String?  // Batsman, Bowler, Forward, Goalkeeper, Setter, etc.
+  battingStyle        String?  // Right-hand, Left-hand
+  bowlingStyle        String?  // Right-arm fast, Spin, etc.
+  dominantFoot        String?  // Left, Right, Both
+  heightCm            Float?
+  weightKg            Float?
+  performanceCategory String   @default("DEVELOPING") // DEVELOPING, INTERMEDIATE, ADVANCED, EXCELLENT, ELITE
+  bio                 String?
+  achievementsJson    String?  // JSON array of achievements
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primarySport        Sport?   @relation(fields: [primarySportId], references: [id], onDelete: SetNull)
+  statistics          PlayerStatistic[]
+  rankings            PlayerRanking[]
+}
+
+model CaptainProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  experienceYears   Int      @default(1)
+  certification     String?
+  sportsManagedJson String?  // JSON array of sport IDs
+  bio               String?
+  achievementsJson  String?  // JSON array of tournament wins
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OfficialProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  officialType       String   @default("REFEREE") // REFEREE, UMPIRE, SCORER, LINE_JUDGE
+  badgeNumber        String?
+  licenseLevel       String   @default("REGIONAL") // DISTRICT, REGIONAL, NATIONAL, FIFA/ICC
+  experienceYears    Int      @default(1)
+  isVerifiedByAdmin  Boolean  @default(false)
+  bio                String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FanProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  favoriteCityId     String?
+  favoriteSportId    String?
+  favoriteSportsJson String?  // JSON array of sport codes
+  favoriteTeamsJson  String?  // JSON array of team IDs
+  cheerBio           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AdminProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  designation   String?  // City Sports Officer, Regional Coordinator, Super Administrator
+  department    String?  // District Sports Board, Community Management
+  officeContact String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// 3. Sports & Configurable Rules
+// -------------------------------------------------------------
+
+model SportCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique // TEAM_SPORTS, INDIVIDUAL_SPORTS
+  type      String   // TEAM, INDIVIDUAL
+  createdAt DateTime @default(now())
+
+  sports    Sport[]
+}
+
+model Sport {
+  id                String   @id @default(uuid())
+  categoryId        String
+  name              String   @unique
+  code              String   @unique // FOOTBALL, CRICKET, VOLLEYBALL, BADMINTON, TABLE_TENNIS, SNOOKER
+  isTeamSport       Boolean
+  playersPerTeam    Int      @default(11)
+  minPlayersRequired Int     @default(7)
+  rulesJson         String?  // Scoring format, max sets/overs, point thresholds
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  category          SportCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  teams             Team[]
+  matches           Match[]
+  transfers         PlayerTransfer[]
+  playerProfiles    PlayerProfile[]
+  userRoles         UserRole[]
+  playerStatistics  PlayerStatistic[]
+  teamStatistics    TeamStatistic[]
+  playerRankings    PlayerRanking[]
+  teamRankings      TeamRanking[]
+  scorebooks        Scorebook[]
+  rankingRules      RankingRule[]
+  matchPhotos       MatchPhoto[]
+  payments          Payment[]
+  feeConfigs        FeeConfiguration[]
+
+  @@index([categoryId])
+}
+
+model FeeConfiguration {
+  id          String   @id @default(uuid())
+  feeType     String   // TEAM_REGISTRATION, INDIVIDUAL_SPORT_REGISTRATION, PLAYER_TRANSFER
+  amount      Float
+  currency    String   @default("PKR")
+  sportId     String?
+  cityId      String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sport       Sport?   @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  city        City?    @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@index([feeType, sportId, cityId])
+}
+
+// -------------------------------------------------------------
+// 4. Teams, Membership & Transfers
+// -------------------------------------------------------------
+
+model Team {
+  id          String   @id @default(uuid())
+  cityId      String
+  sportId     String
+  captainId   String
+  name        String
+  code        String
+  logoUrl     String?
+  status      String   @default("PENDING_PAYMENT") // DRAFT, PENDING_PAYMENT, PAYMENT_SUBMITTED, PENDING_APPROVAL, ACTIVE, SUSPENDED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  city        City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  sport       Sport    @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  captain     User     @relation("TeamCaptain", fields: [captainId], references: [id], onDelete: Restrict)
+
+  members     TeamMember[]
+  invitations TeamInvitation[]
+  requests    TeamRequest[]
+  
+  transfersFrom PlayerTransfer[] @relation("TransferOldTeam")
+  transfersTo   PlayerTransfer[] @relation("TransferNewTeam")
+
+  homeMatches   Match[]          @relation("HomeTeam")
+  awayMatches   Match[]          @relation("AwayTeam")
+  matchesWon    Match[]          @relation("MatchWinner")
+
+  teamStats     TeamStatistic[]
+  teamRankings  TeamRanking[]
+  matchPhotos   MatchPhoto[]
+  payments      Payment[]
+  teamMatchStats TeamMatchStatistic[]
+
+  @@unique([cityId, sportId, name])
+  @@unique([cityId, sportId, code])
+  @@index([cityId])
+  @@index([sportId])
+  @@index([captainId])
+}
+
+model TeamMember {
+  id           String    @id @default(uuid())
+  teamId       String
+  playerId     String
+  role         String    @default("PLAYER") // CAPTAIN, VICE_CAPTAIN, PLAYER
+  jerseyNumber Int?
+  status       String    @default("ACTIVE") // ACTIVE, FORMER, SUSPENDED
+  joinedAt     DateTime  @default(now())
+  leftAt       DateTime?
+
+  team         Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player       User      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, playerId, status])
+  @@index([teamId])
+  @@index([playerId])
+}
+
+model TeamInvitation {
+  id        String   @id @default(uuid())
+  teamId    String
+  playerId  String
+  invitedById String
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED, EXPIRED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player    User     @relation("PlayerInvitations", fields: [playerId], references: [id], onDelete: Cascade)
+  invitedBy User     @relation("SentInvitations", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([playerId])
+}
+
+model TeamRequest {
+  id        String   @id @default(uuid())
+  teamId    String
+  playerId  String
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  message   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([playerId])
+}
+
+model PlayerTransfer {
+  id             String    @id @default(uuid())
+  playerId       String
+  sportId        String
+  cityId         String
+  oldTeamId      String
+  newTeamId      String
+  paymentId      String?   @unique
+  status         String    @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAYMENT_SUBMITTED, PENDING_APPROVAL, COMPLETED, REJECTED
+  fee            Float     @default(100.0)
+  notes          String?
+  approvedById   String?
+  approvedAt     DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  player         User      @relation("PlayerTransfers", fields: [playerId], references: [id], onDelete: Restrict)
+  sport          Sport     @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  city           City      @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  oldTeam        Team      @relation("TransferOldTeam", fields: [oldTeamId], references: [id], onDelete: Restrict)
+  newTeam        Team      @relation("TransferNewTeam", fields: [newTeamId], references: [id], onDelete: Restrict)
+  payment        Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  approvedBy     User?     @relation("TransferApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([playerId])
+  @@index([sportId])
+  @@index([cityId])
+}
+
+// -------------------------------------------------------------
+// 5. Matches, Scheduling & Digital Scorebook
+// -------------------------------------------------------------
+
+model Match {
+  id              String    @id @default(uuid())
+  cityId          String
+  sportId         String
+  homeTeamId      String
+  awayTeamId      String
+  groundId        String?
+  requestedById   String
+  scheduledAt     DateTime
+  homeScore       Int       @default(0)
+  awayScore       Int       @default(0)
+  winnerTeamId    String?
+  status          String    @default("PROPOSED") // PROPOSED, NEGOTIATING, SCHEDULED, IN_PROGRESS, RESULT_SUBMITTED, OFFICIAL_VERIFIED, CANCELLED
+  isLocked        Boolean   @default(false)
+  lockedAt        DateTime?
+  lockedById      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  city            City      @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  sport           Sport     @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  homeTeam        Team      @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam        Team      @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  ground          Ground?   @relation(fields: [groundId], references: [id], onDelete: SetNull)
+  requestedBy     User      @relation("MatchRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  winnerTeam      Team?     @relation("MatchWinner", fields: [winnerTeamId], references: [id], onDelete: SetNull)
+  lockedBy        User?     @relation("MatchLocker", fields: [lockedById], references: [id], onDelete: SetNull)
+
+  participants    MatchParticipant[]
+  officials       MatchOfficial[]
+  scorebook       Scorebook?
+  scoreEvents     ScoreEvent[]
+  teamStats       TeamMatchStatistic[]
+  playerStats     PlayerMatchStatistic[]
+  photos          MatchPhoto[]
+
+  @@index([cityId])
+  @@index([sportId])
+  @@index([scheduledAt])
+}
+
+model MatchParticipant {
+  id         String   @id @default(uuid())
+  matchId    String
+  teamId     String
+  playerId   String
+  isStarting Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player     User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, playerId])
+  @@index([matchId])
+}
+
+model MatchOfficial {
+  id         String   @id @default(uuid())
+  matchId    String
+  officialId String
+  role       String   @default("SCORER") // UMPIRE, REFEREE, SCORER
+  createdAt  DateTime @default(now())
+
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  official   User     @relation(fields: [officialId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, officialId])
+  @@index([matchId])
+}
+
+model Scorebook {
+  id                String    @id @default(uuid())
+  matchId           String    @unique
+  sportId           String
+  currentStateJson  String    @default("{}") // Live score details, overs, sets, frames
+  submittedById     String?
+  submittedAt       DateTime?
+  verifiedById      String?
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  match             Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sport             Sport     @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  submittedBy       User?     @relation("ScorebookSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  verifiedBy        User?     @relation("ScorebookVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  events            ScoreEvent[]
+
+  @@index([sportId])
+}
+
+model ScoreEvent {
+  id           String    @id @default(uuid())
+  scorebookId  String
+  matchId      String
+  eventType    String    // RUNS, WICKET, GOAL, CARD, POINT, SET_WON, FRAME_WON
+  teamId       String
+  playerId     String?
+  minuteOrBall String?
+  setOrInnings Int?      @default(1)
+  detailsJson  String    @default("{}") // runs scored, card color, bowler/assist
+  createdAt    DateTime  @default(now())
+
+  scorebook    Scorebook @relation(fields: [scorebookId], references: [id], onDelete: Cascade)
+  match        Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([scorebookId])
+  @@index([matchId])
+}
+
+// -------------------------------------------------------------
+// 6. Statistics, Match Summaries & Rankings
+// -------------------------------------------------------------
+
+model TeamMatchStatistic {
+  id        String   @id @default(uuid())
+  matchId   String
+  teamId    String
+  statsJson String   @default("{}") // Goals, runs, overs, corners, etc.
+  result    String   // WIN, LOSS, DRAW
+  createdAt DateTime @default(now())
+
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, teamId])
+  @@index([teamId])
+}
+
+model PlayerMatchStatistic {
+  id        String   @id @default(uuid())
+  matchId   String
+  playerId  String
+  teamId    String
+  sportId   String
+  statsJson String   @default("{}") // Goals, assists, runs, wickets, points, fouls
+  isMvp     Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, playerId])
+  @@index([playerId])
+  @@index([teamId])
+}
+
+model PlayerStatistic {
+  id                  String   @id @default(uuid())
+  playerId            String
+  sportId             String
+  matchesPlayed       Int      @default(0)
+  wins                Int      @default(0)
+  losses              Int      @default(0)
+  draws               Int      @default(0)
+  goals               Int      @default(0)
+  assists             Int      @default(0)
+  runs                Int      @default(0)
+  wickets             Int      @default(0)
+  points              Int      @default(0)
+  mvpCount            Int      @default(0)
+  ratingScore         Float    @default(100.0)
+  performanceCategory String   @default("DEVELOPING") // DEVELOPING, INTERMEDIATE, ADVANCED, EXCELLENT, ELITE
+  updatedAt           DateTime @updatedAt
+
+  playerProfile       PlayerProfile @relation(fields: [playerId], references: [userId], onDelete: Cascade)
+  sport               Sport         @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, sportId])
+  @@index([sportId])
+}
+
+model TeamStatistic {
+  id            String   @id @default(uuid())
+  teamId        String
+  sportId       String
+  matchesPlayed Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  draws         Int      @default(0)
+  points        Int      @default(0)
+  rankScore     Float    @default(100.0)
+  updatedAt     DateTime @updatedAt
+
+  team          Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sport         Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, sportId])
+  @@index([sportId])
+}
+
+model PlayerRanking {
+  id                String   @id @default(uuid())
+  playerId          String
+  sportId           String
+  cityId            String?
+  regionId          String?
+  rankPosition      Int
+  points            Float
+  performanceRating Float
+  updatedAt         DateTime @updatedAt
+
+  playerProfile     PlayerProfile @relation(fields: [playerId], references: [userId], onDelete: Cascade)
+  sport             Sport         @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  city              City?         @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  region            Region?       @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  @@unique([playerId, sportId, cityId])
+  @@index([sportId, cityId, rankPosition])
+  @@index([sportId, regionId, rankPosition])
+}
+
+model TeamRanking {
+  id             String   @id @default(uuid())
+  teamId         String
+  sportId        String
+  cityId         String?
+  regionId       String?
+  rankPosition   Int
+  points         Int
+  goalDiffOrNrr  Float    @default(0.0)
+  updatedAt      DateTime @updatedAt
+
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sport          Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  city           City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  region         Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  @@unique([teamId, sportId, cityId])
+  @@index([sportId, cityId, rankPosition])
+  @@index([sportId, regionId, rankPosition])
+}
+
+model RankingRule {
+  id               String   @id @default(uuid())
+  sportId          String
+  winPoints        Int      @default(3)
+  drawPoints       Int      @default(1)
+  lossPoints       Int      @default(0)
+  mvpBonusPoints   Int      @default(5)
+  calculationModel String   @default("STANDARD") // STANDARD, ELO, CRICKET_NRR, SNOOKER_FRAMES
+  createdAt        DateTime @default(now())
+
+  sport            Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([sportId])
+}
+
+// -------------------------------------------------------------
+// 7. Payment Verification & Audit Records
+// -------------------------------------------------------------
+
+model Payment {
+  id              String    @id @default(uuid())
+  userId          String
+  teamId          String?
+  sportId         String?
+  cityId          String?
+  paymentType     String    // TEAM_REGISTRATION, INDIVIDUAL_SPORT_REGISTRATION, PLAYER_TRANSFER
+  amount          Float
+  currency        String    @default("PKR")
+  status          String    @default("PENDING") // PENDING, SUBMITTED, VERIFIED, REJECTED
+  referenceNumber String?
+  verifiedById    String?
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation("UserPayments", fields: [userId], references: [id], onDelete: Restrict)
+  team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  sport           Sport?    @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  city            City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  verifiedBy      User?     @relation("PaymentVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  transactions    PaymentTransaction[]
+  verifications   PaymentVerification[]
+  transfer        PlayerTransfer?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model PaymentTransaction {
+  id                   String   @id @default(uuid())
+  paymentId            String
+  paymentMethod        String   // EASYPAISA, JAZZCASH, BANK_TRANSFER, CASH
+  transactionReference String
+  proofImageUrl        String?
+  remarks              String?
+  createdAt            DateTime @default(now())
+
+  payment              Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
+model PaymentVerification {
+  id              String   @id @default(uuid())
+  paymentId       String
+  verifiedById    String
+  action          String   // APPROVED, REJECTED
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  verifiedBy      User     @relation(fields: [verifiedById], references: [id], onDelete: Restrict)
+
+  @@index([paymentId])
+}
+
+// -------------------------------------------------------------
+// 8. Notifications, Community & Media
+// -------------------------------------------------------------
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CommunityPost {
+  id          String   @id @default(uuid())
+  communityId String
+  authorId    String
+  title       String
+  content     String
+  postType    String   @default("ANNOUNCEMENT") // ANNOUNCEMENT, HIGHLIGHT, EVENT, POLL
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([communityId])
+}
+
+model MatchPhoto {
+  id            String    @id @default(uuid())
+  matchId       String
+  teamId        String
+  cityId        String
+  sportId       String
+  uploaderId    String
+  photoUrl      String
+  caption       String?
+  status        String    @default("PENDING_MODERATION") // PENDING_MODERATION, APPROVED, REJECTED
+  moderatedById String?
+  moderatedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  match         Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team          Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  city          City      @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  sport         Sport     @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  uploader      User      @relation("PhotoUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  moderatedBy   User?     @relation("PhotoModerator", fields: [moderatedById], references: [id], onDelete: SetNull)
+
+  @@index([matchId])
+  @@index([cityId])
+  @@index([sportId])
+}
+
+// -------------------------------------------------------------
+// 9. Audit Logging
+// -------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String   // e.g. CITY_CREATED, TEAM_APPROVED, MATCH_LOCKED, PAYMENT_VERIFIED, TRANSFER_COMPLETED
+  entityType  String   // City, Team, Match, Payment, Transfer, User, etc.
+  entityId    String
+  changesJson String   @default("{}")
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+"""
+
+write_file('prisma/schema.prisma', schema_content)

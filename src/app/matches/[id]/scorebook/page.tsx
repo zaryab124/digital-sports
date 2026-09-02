@@ -1,0 +1,619 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import {
+  Activity, Shield, Trophy, CheckCircle, Lock, Plus, User,
+  AlertCircle, Clock, MapPin, Camera, Trash2, Check, Play,
+  RotateCcw, Sparkles, ArrowLeft
+} from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+
+export default function DigitalScorebookPage() {
+  const params = useParams();
+  const matchId = params?.id as string;
+
+  const [match, setMatch] = useState<any>(null);
+  const [scorebook, setScorebook] = useState<any>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const [permissions, setPermissions] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+
+  // Tabs: 'PRE_MATCH' | 'SCORING' | 'LOG' | 'FINALIZE'
+  const [activeTab, setActiveTab] = useState('SCORING');
+
+  // Pre-Match Inputs
+  const [groundConfirmed, setGroundConfirmed] = useState(true);
+  const [pitchCondition, setPitchCondition] = useState('Dry turf pitch, boundary markings confirmed');
+  const [tossWinnerTeamId, setTossWinnerTeamId] = useState('');
+  const [tossDecision, setTossDecision] = useState('BAT');
+
+  // Scoring Inputs
+  const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [secondaryPlayerId, setSecondaryPlayerId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Post-match Inputs
+  const [summaryNotes, setSummaryNotes] = useState('');
+  const [evidencePhotoUrl, setEvidencePhotoUrl] = useState('');
+  const [mvpPlayerId, setMvpPlayerId] = useState('');
+
+  useEffect(() => {
+    if (matchId) loadData();
+  }, [matchId]);
+
+  const loadData = async () => {
+    try {
+      const [mRes, meRes] = await Promise.all([
+        fetch('/api/matches/' + matchId).then((r) => r.json()),
+        fetch('/api/auth/me').then((r) => r.json()),
+      ]);
+
+      if (mRes.match) {
+        setMatch(mRes.match);
+        setScorebook(mRes.match.scorebook);
+        setEvents(mRes.match.scoreEvents || []);
+        setPermissions(mRes.permissions || {});
+        setUser(meRes.user);
+
+        if (!selectedTeamId && mRes.match.homeTeamId) {
+          setSelectedTeamId(mRes.match.homeTeamId);
+          setTossWinnerTeamId(mRes.match.homeTeamId);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePreMatchSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const participants = [
+        ...(match.homeTeam?.members || []).map((m: any) => ({
+          teamId: match.homeTeamId,
+          playerId: m.playerId,
+          isStarting: true,
+          jerseyNumber: m.jerseyNumber,
+        })),
+        ...(match.awayTeam?.members || []).map((m: any) => ({
+          teamId: match.awayTeamId,
+          playerId: m.playerId,
+          isStarting: true,
+          jerseyNumber: m.jerseyNumber,
+        })),
+      ];
+
+      const res = await fetch('/api/scorebook/' + matchId + '/prematch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamsVerified: true,
+          groundConfirmed,
+          pitchCondition,
+          tossWinnerTeamId,
+          tossDecision,
+          participants,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to complete pre-match verification');
+
+      alert('Pre-match verified! Live scoring session active.');
+      setActiveTab('SCORING');
+      loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const logScoreEvent = async (eventType: string, extraDetails: any = {}) => {
+    if (match.isLocked) {
+      alert('This match is officially locked.');
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType,
+          teamId: selectedTeamId || match.homeTeamId,
+          playerId: selectedPlayerId || undefined,
+          detailsJson: JSON.stringify({
+            ...extraDetails,
+            bowlerId: secondaryPlayerId || undefined,
+            assistPlayerId: secondaryPlayerId || undefined,
+          }),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to log score event');
+
+      loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRevertEvent = async (eventId: string) => {
+    if (!confirm('Undo this score event? This will update the scoreboard and create an audit log entry.')) return;
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/events/' + eventId, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        loadData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to revert event');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handlePostMatchSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summaryNotes,
+          evidencePhotoUrl: evidencePhotoUrl || undefined,
+          mvpPlayerId: mvpPlayerId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit scorebook');
+
+      alert(data.message);
+      loadData();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerifyAndLock = async () => {
+    if (!confirm('Officially verify and lock this match? This will lock the scorebook against any edits, process player stats, and update municipal rankings.')) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/scorebook/' + matchId + '/verify', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        loadData();
+      } else {
+        alert(data.error || 'Verification failed');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="text-center py-20 text-slate-400">Loading Digital Scorebook...</div>;
+  if (!match) return <div className="text-center py-20 text-slate-400">Match fixture not found</div>;
+
+  const sportCode = (match.sport?.code || '').toUpperCase();
+  const isHomeSelected = selectedTeamId === match.homeTeamId;
+  const currentTeamRoster = isHomeSelected ? match.homeTeam?.members || [] : match.awayTeam?.members || [];
+  const opponentTeamRoster = isHomeSelected ? match.awayTeam?.members || [] : match.homeTeam?.members || [];
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6 py-4">
+      {/* Top Header */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/matches/${matchId}`}
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Match Overview</span>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          {match.isLocked ? (
+            <Badge variant="gold" className="flex items-center gap-1">
+              <Lock className="w-3 h-3" />
+              <span>OFFICIAL & LOCKED</span>
+            </Badge>
+          ) : match.status === 'LIVE' ? (
+            <Badge variant="red" className="animate-pulse">
+              🔴 LIVE SCORING
+            </Badge>
+          ) : (
+            <Badge variant="blue">{match.status.replace(/_/g, ' ')}</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Main Scorecard Banner */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4">
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span className="font-black uppercase tracking-wider text-emerald-400">{match.sport?.name}</span>
+          <span className="flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+            {match.ground?.name || match.city?.name}
+          </span>
+        </div>
+
+        {/* Live Clash Score Numbers */}
+        <div className="grid grid-cols-2 gap-4 py-2 text-center items-center">
+          <div className={`p-4 rounded-2xl border transition ${isHomeSelected ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-slate-800/60 border-slate-700/80'}`}>
+            <span className="text-xs font-bold text-slate-300 block truncate">{match.homeTeam?.name}</span>
+            <span className="text-4xl sm:text-5xl font-black text-emerald-400 font-mono">{match.homeScore}</span>
+          </div>
+
+          <div className={`p-4 rounded-2xl border transition ${!isHomeSelected ? 'bg-purple-500/10 border-purple-500/40' : 'bg-slate-800/60 border-slate-700/80'}`}>
+            <span className="text-xs font-bold text-slate-300 block truncate">{match.awayTeam?.name}</span>
+            <span className="text-4xl sm:text-5xl font-black text-purple-400 font-mono">{match.awayScore}</span>
+          </div>
+        </div>
+
+        {scorebook?.currentStateJson && (
+          <div className="p-3 rounded-xl bg-slate-800 text-center text-xs font-mono font-bold text-slate-300">
+            {JSON.parse(scorebook.currentStateJson).summary || 'Live Scorebook Session in Progress'}
+          </div>
+        )}
+      </div>
+
+      {/* Workflow Tabs Navigation */}
+      <div className="grid grid-cols-4 gap-2 text-center text-xs font-bold">
+        <button
+          onClick={() => setActiveTab('PRE_MATCH')}
+          className={`py-3 rounded-2xl border transition ${activeTab === 'PRE_MATCH' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
+        >
+          1. Pre-Match
+        </button>
+        <button
+          onClick={() => setActiveTab('SCORING')}
+          className={`py-3 rounded-2xl border transition ${activeTab === 'SCORING' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
+        >
+          2. Live Keypad
+        </button>
+        <button
+          onClick={() => setActiveTab('LOG')}
+          className={`py-3 rounded-2xl border transition ${activeTab === 'LOG' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
+        >
+          3. Event Log ({events.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('FINALIZE')}
+          className={`py-3 rounded-2xl border transition ${activeTab === 'FINALIZE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
+        >
+          4. Lock & Verify
+        </button>
+      </div>
+
+      {/* TAB 1: PRE-MATCH VERIFICATION */}
+      {activeTab === 'PRE_MATCH' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl text-xs">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-400" />
+            <span>Pre-Match Official Checklist</span>
+          </h3>
+
+          <div className="space-y-4">
+            <label className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/80 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={groundConfirmed}
+                onChange={(e) => setGroundConfirmed(e.target.checked)}
+                className="w-4 h-4 text-emerald-500 rounded"
+              />
+              <div>
+                <span className="font-bold text-white block">Venue Ground & Boundary Inspection</span>
+                <span className="text-[11px] text-slate-400">Confirmed pitch dimensions, markings, and safety standards</span>
+              </div>
+            </label>
+
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Pitch & Weather Conditions</label>
+              <input
+                type="text"
+                value={pitchCondition}
+                onChange={(e) => setPitchCondition(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-bold text-slate-300 uppercase mb-1">Toss Winner</label>
+                <select
+                  value={tossWinnerTeamId}
+                  onChange={(e) => setTossWinnerTeamId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold"
+                >
+                  <option value={match.homeTeamId}>{match.homeTeam?.name} (Home)</option>
+                  <option value={match.awayTeamId}>{match.awayTeam?.name} (Away)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-300 uppercase mb-1">Toss Decision</label>
+                <select
+                  value={tossDecision}
+                  onChange={(e) => setTossDecision(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-bold"
+                >
+                  <option value="BAT">Elected to Bat First</option>
+                  <option value="BOWL">Elected to Bowl First</option>
+                  <option value="KICKOFF">Elected to Kickoff</option>
+                  <option value="SERVE">Elected to Serve</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={handlePreMatchSubmit}
+              disabled={submitting}
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-2xl text-xs shadow-xl transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>Confirm Pre-Match & Start Live Session &rarr;</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: LIVE TOUCHPAD */}
+      {activeTab === 'SCORING' && (
+        <div className="space-y-6">
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-4">
+            <span className="text-xs font-bold text-slate-400">Scoring Team:</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedTeamId(match.homeTeamId)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition ${isHomeSelected ? 'bg-emerald-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+              >
+                {match.homeTeam?.name} (Home)
+              </button>
+              <button
+                onClick={() => setSelectedTeamId(match.awayTeamId)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition ${!isHomeSelected ? 'bg-purple-500 text-slate-950 shadow-lg' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+              >
+                {match.awayTeam?.name} (Away)
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Active Player / Striker / Batsman</label>
+              <select
+                value={selectedPlayerId}
+                onChange={(e) => setSelectedPlayerId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold text-xs"
+              >
+                <option value="">-- Select Active Player --</option>
+                {currentTeamRoster.map((m: any) => (
+                  <option key={m.playerId} value={m.playerId}>
+                    {m.player?.fullName} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Secondary Player / Bowler / Assist</label>
+              <select
+                value={secondaryPlayerId}
+                onChange={(e) => setSecondaryPlayerId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-bold text-xs"
+              >
+                <option value="">-- Select Bowler / Assist --</option>
+                {opponentTeamRoster.map((m: any) => (
+                  <option key={m.playerId} value={m.playerId}>
+                    {m.player?.fullName} ({isHomeSelected ? match.awayTeam?.name : match.homeTeam?.name})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <span>Fast Touch Scoring Pad ({sportCode})</span>
+            </h3>
+
+            {sportCode === 'CRICKET' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                  <button onClick={() => logScoreEvent('RUNS', { runs: 0 })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-black text-xl border border-slate-700 shadow transition">0</button>
+                  <button onClick={() => logScoreEvent('RUNS', { runs: 1 })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-black text-xl border border-slate-700 shadow transition">1</button>
+                  <button onClick={() => logScoreEvent('RUNS', { runs: 2 })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-black text-xl border border-slate-700 shadow transition">2</button>
+                  <button onClick={() => logScoreEvent('RUNS', { runs: 3 })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-black text-xl border border-slate-700 shadow transition">3</button>
+                  <button onClick={() => logScoreEvent('RUNS', { runs: 4, isBoundary: true })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-xl shadow-lg transition">4 Four</button>
+                  <button onClick={() => logScoreEvent('RUNS', { runs: 6, isBoundary: true })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black text-xl shadow-lg transition">6 Six</button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <button onClick={() => logScoreEvent('RUNS', { extraRuns: 1, isWide: true })} disabled={submitting || match.isLocked} className="p-4 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 font-black text-sm transition">+1 Wide</button>
+                  <button onClick={() => logScoreEvent('RUNS', { extraRuns: 1, isNoBall: true })} disabled={submitting || match.isLocked} className="p-4 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 font-black text-sm transition">+1 No Ball</button>
+                  <button onClick={() => logScoreEvent('WICKET', { isWicket: true, wicketType: 'BOWLED' })} disabled={submitting || match.isLocked} className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-sm shadow-lg transition">⚡ WICKET</button>
+                  <button onClick={() => logScoreEvent('WICKET', { isWicket: true, wicketType: 'RUN_OUT' })} disabled={submitting || match.isLocked} className="p-4 rounded-2xl bg-rose-800 hover:bg-rose-700 active:scale-95 text-white font-black text-sm shadow-lg transition">🎯 Run Out</button>
+                </div>
+              </div>
+            )}
+
+            {sportCode === 'FOOTBALL' && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onClick={() => logScoreEvent('GOAL')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base shadow-xl transition active:scale-95 flex flex-col items-center gap-1">
+                  <span className="text-2xl">⚽</span><span>GOAL (+1)</span>
+                </button>
+                <button onClick={() => logScoreEvent('CARD', { cardType: 'YELLOW' })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-base shadow-xl transition active:scale-95 flex flex-col items-center gap-1">
+                  <span className="text-2xl">🟨</span><span>Yellow Card</span>
+                </button>
+                <button onClick={() => logScoreEvent('CARD', { cardType: 'RED' })} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-base shadow-xl transition active:scale-95 flex flex-col items-center gap-1">
+                  <span className="text-2xl">🟥</span><span>Red Card</span>
+                </button>
+                <button onClick={() => logScoreEvent('FOUL')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-base border border-slate-700 transition active:scale-95 flex flex-col items-center gap-1">
+                  <span className="text-2xl">⚡</span><span>Foul / Free Kick</span>
+                </button>
+              </div>
+            )}
+
+            {sportCode === 'VOLLEYBALL' && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onClick={() => logScoreEvent('POINT')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base shadow-lg transition active:scale-95">+1 POINT</button>
+                <button onClick={() => logScoreEvent('ACE')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-base shadow-lg transition active:scale-95">🔥 ACE (+1)</button>
+                <button onClick={() => logScoreEvent('BLOCK')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-base shadow-lg transition active:scale-95">🛡️ BLOCK (+1)</button>
+                <button onClick={() => logScoreEvent('SET_WON')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-base shadow-lg transition active:scale-95">🏆 SET WON</button>
+              </div>
+            )}
+
+            {(sportCode === 'BADMINTON' || sportCode === 'TABLE_TENNIS') && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onClick={() => logScoreEvent('POINT')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base shadow-lg transition active:scale-95">+1 POINT</button>
+                <button onClick={() => logScoreEvent('SMASH')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-base shadow-lg transition active:scale-95">💥 SMASH WINNER</button>
+                <button onClick={() => logScoreEvent('UNFORCED_ERROR')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 font-black text-base transition">❌ Error</button>
+                <button onClick={() => logScoreEvent('GAME_WON')} disabled={submitting || match.isLocked} className="p-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-base shadow-lg transition active:scale-95">🏆 GAME WON</button>
+              </div>
+            )}
+
+            {sportCode === 'SNOOKER' && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                  <button onClick={() => logScoreEvent('RED', { points: 1 })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-rose-600 text-white font-black text-xs shadow">🔴 Red (1)</button>
+                  <button onClick={() => logScoreEvent('COLOUR', { points: 2, colour: 'YELLOW' })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-amber-400 text-slate-950 font-black text-xs shadow">🟡 Yel (2)</button>
+                  <button onClick={() => logScoreEvent('COLOUR', { points: 3, colour: 'GREEN' })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-emerald-600 text-white font-black text-xs shadow">🟢 Grn (3)</button>
+                  <button onClick={() => logScoreEvent('COLOUR', { points: 4, colour: 'BROWN' })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-amber-800 text-white font-black text-xs shadow">🟤 Brn (4)</button>
+                  <button onClick={() => logScoreEvent('COLOUR', { points: 5, colour: 'BLUE' })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-blue-600 text-white font-black text-xs shadow">🔵 Blu (5)</button>
+                  <button onClick={() => logScoreEvent('COLOUR', { points: 6, colour: 'PINK' })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-pink-500 text-white font-black text-xs shadow">🌸 Pnk (6)</button>
+                  <button onClick={() => logScoreEvent('COLOUR', { points: 7, colour: 'BLACK' })} disabled={submitting || match.isLocked} className="p-3.5 rounded-xl bg-slate-950 text-white border border-slate-700 font-black text-xs shadow">⚫ Blk (7)</button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => logScoreEvent('FOUL', { points: 4, isFoul: true })} disabled={submitting || match.isLocked} className="p-4 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/40 font-black text-xs">⚠️ Foul (4 Pts Penalty)</button>
+                  <button onClick={() => logScoreEvent('FRAME_WON')} disabled={submitting || match.isLocked} className="p-4 rounded-xl bg-blue-600 text-white font-black text-xs shadow">🏆 FRAME WON</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: EVENT LOG & AUDIT HISTORY */}
+      {activeTab === 'LOG' && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center justify-between">
+            <span>Scorebook Event Audit Timeline</span>
+            <span className="text-xs text-slate-400 font-mono">{events.length} Events Logged</span>
+          </h3>
+
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+            {events.length === 0 ? (
+              <div className="text-center py-10 text-slate-500 text-xs">No events recorded yet.</div>
+            ) : (
+              events.map((ev) => (
+                <div key={ev.id} className="p-3 rounded-2xl bg-slate-800/70 border border-slate-700/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[10px] text-slate-400">
+                      {new Date(ev.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                    <Badge variant={ev.teamId === match.homeTeamId ? 'green' : 'purple'}>{ev.eventType}</Badge>
+                    <span className="font-bold text-white">{ev.player?.fullName || 'Squad Event'}</span>
+                  </div>
+
+                  {!match.isLocked && (
+                    <button
+                      onClick={() => handleRevertEvent(ev.id)}
+                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition"
+                      title="Undo Event"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: LOCK & OFFICIAL VERIFICATION */}
+      {activeTab === 'FINALIZE' && (
+        <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-2xl text-xs">
+          <div className="space-y-1">
+            <h3 className="text-base font-black text-white flex items-center gap-2">
+              <Lock className="w-5 h-5 text-amber-400" />
+              <span>Finalize & Officially Sanction Scorebook</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              Attach score sheet photo proof, record MVP player, and lock the match permanently.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Official Scoresheet / Result Photo Evidence URL</label>
+              <input
+                type="url"
+                value={evidencePhotoUrl}
+                onChange={(e) => setEvidencePhotoUrl(e.target.value)}
+                placeholder="https://example.com/scoresheet-signed.jpg"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-300 uppercase mb-1">Match Summary Remarks</label>
+              <textarea
+                rows={3}
+                value={summaryNotes}
+                onChange={(e) => setSummaryNotes(e.target.value)}
+                placeholder="Official scorer notes, ground conditions, exceptional performances..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs"
+              />
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={handlePostMatchSubmit}
+                disabled={submitting || match.isLocked}
+                className="w-full sm:w-auto px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl text-xs border border-slate-700 transition"
+              >
+                Submit Scorebook for Admin Verification
+              </button>
+
+              <button
+                onClick={handleVerifyAndLock}
+                disabled={submitting || match.isLocked}
+                className="w-full sm:w-auto px-8 py-3.5 bg-purple-500 hover:bg-purple-400 text-slate-950 font-black rounded-2xl text-xs shadow-xl transition flex items-center justify-center gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Verify Result, Lock Match & Update Standings &rarr;</span>
+              </button>
+            </div>
+
+            {match.isLocked && (
+              <div className="p-4 rounded-2xl bg-gold-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
+                <Lock className="w-4 h-4 flex-shrink-0" />
+                <span>This match is officially locked. Scores and player statistics are immutable.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
