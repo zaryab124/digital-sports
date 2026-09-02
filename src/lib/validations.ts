@@ -7,7 +7,7 @@ export const registerSchema = z.object({
   phone: z.string().optional(),
   cnic: z.string().optional(),
   homeCityId: z.string().min(1, 'Please select your official home city'),
-  initialRole: z.enum(['PLAYER', 'CAPTAIN', 'OFFICIAL', 'FAN']),
+  initialRole: z.enum(['PLAYER', 'CAPTAIN', 'OFFICIAL', 'FAN', 'SUPER_ADMIN', 'CITY_ADMIN']),
   primarySportId: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
   

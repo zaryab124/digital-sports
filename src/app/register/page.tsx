@@ -167,8 +167,10 @@ export default function RegisterPage() {
               className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
               <option value="PLAYER">Player / Athlete</option>
-              <option value="CAPTAIN">Team Captain</option>
+              <option value="CAPTAIN">Team Captain (Club Manager)</option>
               <option value="OFFICIAL">Match Official / Scorer</option>
+              <option value="SUPER_ADMIN">System Administrator / Commissioner</option>
+              <option value="CITY_ADMIN">City Sports Officer</option>
               <option value="FAN">Fan / Spectator</option>
             </select>
           </div>

@@ -195,6 +195,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (initialRole === 'SUPER_ADMIN' || initialRole === 'CITY_ADMIN') {
+      await prisma.adminProfile.create({
+        data: {
+          userId: user.id,
+          designation: initialRole === 'SUPER_ADMIN' ? 'Chief Sports Commissioner' : `${city.name} Sports Officer`,
+          department: 'South Punjab Sports Board',
+        },
+      });
+    }
+
     // Generate Verification Token
     const verifyToken = await createVerificationToken(user.email, 'EMAIL_VERIFY');
 
