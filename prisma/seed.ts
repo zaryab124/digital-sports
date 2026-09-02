@@ -8,7 +8,9 @@ async function hash(pw: string): Promise<string> {
 }
 
 async function main() {
-  console.log('--- Starting Comprehensive Seed for Sports Community ---');
+  console.log('======================================================');
+  console.log('INITIALIZING REAL-BASED DIGITAL SPORTS PLATFORM');
+  console.log('======================================================\n');
 
   // 1. Provinces & Regions
   const punjab = await prisma.province.upsert({
@@ -27,7 +29,7 @@ async function main() {
     },
   });
 
-  // 2. Dynamic Cities with Slugs, Descriptions, and Image URLs
+  // 2. Real Municipal Cities & Automated Community Provisioning
   const initialCities = [
     {
       name: 'Jampur',
@@ -85,6 +87,7 @@ async function main() {
     const city = await prisma.city.upsert({
       where: { code: c.code },
       update: {
+        name: c.name,
         slug: c.slug,
         description: c.description,
         imageUrl: c.imageUrl,
@@ -98,42 +101,37 @@ async function main() {
         description: c.description,
         imageUrl: c.imageUrl,
         regionId: southPunjab.id,
-        isActive: true,
         status: 'ACTIVE',
+        isActive: true,
       },
     });
     cityMap[c.code] = city;
 
-    // Auto-create Community for each active city
     await prisma.community.upsert({
       where: { cityId: city.id },
-      update: {
-        name: `${city.name} Sports Community`,
-        description: `Official digital community hub for athletes, captains, and fans in ${city.name}.`,
-        isActive: true,
-      },
+      update: { isActive: true },
       create: {
         cityId: city.id,
         name: `${city.name} Sports Community`,
         description: `Official digital community hub for athletes, captains, and fans in ${city.name}.`,
-        bannerUrl: c.imageUrl,
+        bannerUrl: city.imageUrl,
         isActive: true,
       },
     });
   }
-  console.log('[OK] Seeded 7 Cities & Automated Communities');
+  console.log('[OK] Seeded 7 Municipal Cities & Community Hubs');
 
-  // 3. Sports Categories & Sports with Slugs, Icons, and Fees
+  // 3. Sports Categories & 6 Core Sports
   const teamCat = await prisma.sportCategory.upsert({
-    where: { name: 'TEAM_SPORTS' },
+    where: { name: 'Team Sports' },
     update: {},
-    create: { name: 'TEAM_SPORTS', type: 'TEAM' },
+    create: { name: 'Team Sports', slug: 'team-sports', description: 'Squad-based athletic disciplines' },
   });
 
-  const individualCat = await prisma.sportCategory.upsert({
-    where: { name: 'INDIVIDUAL_SPORTS' },
+  const indCat = await prisma.sportCategory.upsert({
+    where: { name: 'Individual & Racket Sports' },
     update: {},
-    create: { name: 'INDIVIDUAL_SPORTS', type: 'INDIVIDUAL' },
+    create: { name: 'Individual & Racket Sports', slug: 'individual-sports', description: 'Singles, doubles, and precision sports' },
   });
 
   const initialSports = [
@@ -148,8 +146,8 @@ async function main() {
       minPlayersRequired: 7,
       registrationType: 'TEAM',
       registrationFee: 1500.0,
-      description: 'The premier sport across South Punjab featuring T20, 40-over, and tape-ball leagues with detailed runs, overs, and wicket tracking.',
-      rules: { scoring: 'RUNS_AND_WICKETS', maxOversDefault: 20, ballsPerOver: 6 },
+      description: 'Competitive leather and tape-ball cricket with ball-by-ball score tracking, runs, wickets, and Net Run Rate (NRR) calculations.',
+      rules: { overs: 20, maxOversPerBowler: 4, powerplayOvers: 6 },
     },
     {
       name: 'Football',
@@ -161,9 +159,9 @@ async function main() {
       playersPerTeam: 11,
       minPlayersRequired: 7,
       registrationType: 'TEAM',
-      registrationFee: 1200.0,
-      description: 'Exciting 90-minute association football competitions with goal, assist, yellow/red card, and foul tracking.',
-      rules: { scoring: 'GOALS', halfDurationMinutes: 45, extraTimeEnabled: true },
+      registrationFee: 1500.0,
+      description: 'Full-pitch 90-minute and 7-a-side football tournaments with goals, cards, and goal-difference standings.',
+      rules: { durationMinutes: 90, extraTimeMinutes: 30, penaltyShootout: true },
     },
     {
       name: 'Volleyball',
@@ -173,32 +171,32 @@ async function main() {
       categoryId: teamCat.id,
       isTeamSport: true,
       playersPerTeam: 6,
-      minPlayersRequired: 4,
+      minPlayersRequired: 6,
       registrationType: 'TEAM',
       registrationFee: 1000.0,
-      description: 'High-energy best-of-5 sets volleyball action with point rotation and set-win tracking.',
-      rules: { scoring: 'SETS_AND_POINTS', pointsToWinSet: 25, maxSets: 5 },
+      description: 'Fast-paced court volleyball and shooting volleyball championships with set-based scoring (best of 3 or 5).',
+      rules: { setsToWin: 3, pointsPerSet: 25, finalSetPoints: 15 },
     },
     {
       name: 'Badminton',
       slug: 'badminton',
       code: 'BADMINTON',
       icon: '🏸',
-      categoryId: individualCat.id,
+      categoryId: indCat.id,
       isTeamSport: false,
       playersPerTeam: 1,
       minPlayersRequired: 1,
       registrationType: 'INDIVIDUAL',
       registrationFee: 500.0,
-      description: 'Fast-paced singles and doubles badminton tournaments with rally-point scoring up to 21 points.',
-      rules: { scoring: 'SETS_AND_POINTS', pointsToWinSet: 21, maxSets: 3 },
+      description: 'Official 21-point rally singles and doubles badminton tournaments with serve and game-point tracking.',
+      rules: { scoring: 'RALLY_21', setsToWin: 2, maxSets: 3 },
     },
     {
       name: 'Table Tennis',
       slug: 'table-tennis',
       code: 'TABLE_TENNIS',
       icon: '🏓',
-      categoryId: individualCat.id,
+      categoryId: indCat.id,
       isTeamSport: false,
       playersPerTeam: 1,
       minPlayersRequired: 1,
@@ -212,7 +210,7 @@ async function main() {
       slug: 'snooker',
       code: 'SNOOKER',
       icon: '🎱',
-      categoryId: individualCat.id,
+      categoryId: indCat.id,
       isTeamSport: false,
       playersPerTeam: 1,
       minPlayersRequired: 1,
@@ -223,7 +221,6 @@ async function main() {
     },
   ];
 
-  const sportMap: Record<string, any> = {};
   for (const s of initialSports) {
     const sport = await prisma.sport.upsert({
       where: { code: s.code },
@@ -255,9 +252,7 @@ async function main() {
         isActive: true,
       },
     });
-    sportMap[s.code] = sport;
 
-    // Seed Ranking Rule for sport
     await prisma.rankingRule.upsert({
       where: { sportId: sport.id },
       update: {},
@@ -273,7 +268,7 @@ async function main() {
   }
   console.log('[OK] Seeded 6 Sports with Slugs, Icons, Fees & Ranking Rules');
 
-  // 4. City Grounds with GPS & Sports Capabilities
+  // 4. City Grounds
   const groundsData = [
     { city: 'JAM', name: 'Jampur Municipal Sports Stadium', address: 'Stadium Road, Jampur', capacity: 3500, sports: ['CRICKET', 'FOOTBALL'] },
     { city: 'JAM', name: 'Govt High School No. 1 Ground', address: 'Circular Road, Jampur', capacity: 1200, sports: ['VOLLEYBALL', 'BADMINTON'] },
@@ -284,30 +279,40 @@ async function main() {
   ];
 
   for (const g of groundsData) {
-    await prisma.ground.create({
-      data: {
-        cityId: cityMap[g.city].id,
-        name: g.name,
-        address: g.address,
-        capacity: g.capacity,
-        sportsSupported: JSON.stringify(g.sports),
-        isActive: true,
-      },
+    const existingGround = await prisma.ground.findFirst({
+      where: { cityId: cityMap[g.city].id, name: g.name },
     });
+    if (!existingGround) {
+      await prisma.ground.create({
+        data: {
+          cityId: cityMap[g.city].id,
+          name: g.name,
+          address: g.address,
+          capacity: g.capacity,
+          sportsSupported: JSON.stringify(g.sports),
+          isActive: true,
+        },
+      });
+    }
   }
   console.log('[OK] Seeded City Grounds');
 
   // 5. Configurable Fees
-  const fees = [
-    { feeType: 'TEAM_REGISTRATION', amount: 1000.0, description: 'Standard yearly team club registration fee' },
-    { feeType: 'INDIVIDUAL_SPORT_REGISTRATION', amount: 500.0, description: 'Annual individual sport athlete registration fee' },
-    { feeType: 'PLAYER_TRANSFER', amount: 100.0, description: 'Standard inter-club player transfer fee' },
+  const defaultFees = [
+    { id: 'fee-team-reg', feeType: 'TEAM_REGISTRATION', amount: 1000.0, description: 'Standard yearly team club registration fee' },
+    { id: 'fee-ind-reg', feeType: 'INDIVIDUAL_SPORT_REGISTRATION', amount: 500.0, description: 'Annual individual sport athlete registration fee' },
+    { id: 'fee-player-transfer', feeType: 'PLAYER_TRANSFER', amount: 100.0, description: 'Standard inter-club player transfer fee' },
   ];
-  for (const f of fees) {
-    await prisma.feeConfiguration.create({ data: f });
+  for (const f of defaultFees) {
+    await prisma.feeConfiguration.upsert({
+      where: { id: f.id },
+      update: { amount: f.amount },
+      create: { ...f, currency: 'PKR', isActive: true },
+    });
   }
+  console.log('[OK] Configured Baseline Fees (Rs. 1,000 Team / Rs. 100 Transfer)');
 
-  // 6. Roles
+  // 6. System Roles
   const roleCodes = [
     'SUPER_ADMIN',
     'REGIONAL_ADMIN',
@@ -327,267 +332,46 @@ async function main() {
     });
   }
 
-  // 7. Demo Users with Specialized Profiles
-  const defaultPasswordHash = await hash('password123');
-
-  // A. Super Admin
-  const superAdmin = await prisma.user.upsert({
-    where: { email: 'superadmin@sports.pk' },
-    update: {},
-    create: {
-      email: 'superadmin@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Dr. Tariq Mehmood',
-      homeCityId: cityMap['MUL'].id,
+  // 7. Single Master Super Administrator Account (NO DEMO / MOCK USERS)
+  const masterPasswordHash = await hash('Admin@Sports2026!');
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@sports.pk' },
+    update: {
+      passwordHash: masterPasswordHash,
+      fullName: 'System Administrator',
+      status: 'ACTIVE',
       isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['SUPER_ADMIN'].id }],
-      },
+    },
+    create: {
+      email: 'admin@sports.pk',
+      passwordHash: masterPasswordHash,
+      fullName: 'System Administrator',
+      phone: '+92 300 0000000',
+      homeCityId: cityMap['JAM'].id,
+      isEmailVerified: true,
+      status: 'ACTIVE',
       adminProfile: {
         create: {
-          designation: 'Chief Administrator & Sports Commissioner',
-          department: 'South Punjab Sports Board',
-          officeContact: '+92 61 9200111',
+          designation: 'Chief Administrator & Platform Commissioner',
+          department: 'South Punjab Digital Sports Platform',
+          officeContact: '+92 300 0000000',
         },
       },
     },
   });
 
-  // B. Jampur City Admin
-  const jampurAdmin = await prisma.user.upsert({
-    where: { email: 'cityadmin.jampur@sports.pk' },
+  await prisma.userRole.upsert({
+    where: { id: 'master-super-admin-role' },
     update: {},
     create: {
-      email: 'cityadmin.jampur@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Farooq Leghari',
-      homeCityId: cityMap['JAM'].id,
-      isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['CITY_ADMIN'].id, cityId: cityMap['JAM'].id }],
-      },
-      adminProfile: {
-        create: {
-          designation: 'Jampur City Sports Officer',
-          department: 'District Sports Management',
-          officeContact: '+92 604 567890',
-        },
-      },
+      id: 'master-super-admin-role',
+      userId: admin.id,
+      roleId: roleMap['SUPER_ADMIN'].id,
     },
   });
 
-  // C. DG Khan City Admin
-  await prisma.user.upsert({
-    where: { email: 'cityadmin.dgkhan@sports.pk' },
-    update: {},
-    create: {
-      email: 'cityadmin.dgkhan@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Malik Zeeshan',
-      homeCityId: cityMap['DGK'].id,
-      isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['CITY_ADMIN'].id, cityId: cityMap['DGK'].id }],
-      },
-      adminProfile: {
-        create: {
-          designation: 'DG Khan Sports Officer',
-          department: 'District Sports Board DG Khan',
-        },
-      },
-    },
-  });
-
-  // D. Captain Ali (Jampur Lions)
-  const captainAli = await prisma.user.upsert({
-    where: { email: 'captain.ali@sports.pk' },
-    update: {},
-    create: {
-      email: 'captain.ali@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Ali Raza Khan',
-      homeCityId: cityMap['JAM'].id,
-      isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['CAPTAIN'].id, cityId: cityMap['JAM'].id, sportId: sportMap['CRICKET'].id }],
-      },
-      playerProfile: {
-        create: {
-          primarySportId: sportMap['CRICKET'].id,
-          jerseyNumber: 7,
-          position: 'Top-Order Batsman & Captain',
-          battingStyle: 'Right-hand',
-          performanceCategory: 'PROVINCIAL',
-          bio: 'Leader of Jampur Lions Cricket Club. Over 10 years playing cricket across South Punjab.',
-        },
-      },
-      captainProfile: {
-        create: {
-          experienceYears: 6,
-          certification: 'PCB Level-1 Coaching & Leadership',
-          sportsManagedJson: JSON.stringify([sportMap['CRICKET'].id]),
-        },
-      },
-    },
-  });
-
-  // E. Official Ahmed (Verified Umpire / Scorer)
-  await prisma.user.upsert({
-    where: { email: 'official.ahmed@sports.pk' },
-    update: {},
-    create: {
-      email: 'official.ahmed@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Ahmed Hassan',
-      homeCityId: cityMap['JAM'].id,
-      isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['OFFICIAL'].id, cityId: cityMap['JAM'].id, sportId: sportMap['CRICKET'].id }],
-      },
-      officialProfile: {
-        create: {
-          officialType: 'UMPIRE',
-          badgeNumber: 'PCB-UMP-4421',
-          licenseLevel: 'REGIONAL',
-          experienceYears: 8,
-          isVerifiedByAdmin: true,
-          bio: 'Certified PCB Regional Panel Umpire and digital scorekeeper.',
-        },
-      },
-    },
-  });
-
-  // F. Player Bilal
-  const playerBilal = await prisma.user.upsert({
-    where: { email: 'player.bilal@sports.pk' },
-    update: {},
-    create: {
-      email: 'player.bilal@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Bilal Gujjar',
-      homeCityId: cityMap['JAM'].id,
-      isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['PLAYER'].id, cityId: cityMap['JAM'].id, sportId: sportMap['CRICKET'].id }],
-      },
-      playerProfile: {
-        create: {
-          primarySportId: sportMap['CRICKET'].id,
-          jerseyNumber: 99,
-          position: 'Right-arm Fast Bowler',
-          bowlingStyle: 'Right-arm fast',
-          performanceCategory: 'EMERGING',
-          bio: 'Pace bowler clocking 135+ kph with sharp yorkers.',
-        },
-      },
-    },
-  });
-
-  // G. Community Fan
-  await prisma.user.upsert({
-    where: { email: 'fan.sana@sports.pk' },
-    update: {},
-    create: {
-      email: 'fan.sana@sports.pk',
-      passwordHash: defaultPasswordHash,
-      fullName: 'Sana Fatima',
-      homeCityId: cityMap['JAM'].id,
-      isEmailVerified: true,
-      userRoles: {
-        create: [{ roleId: roleMap['FAN'].id, cityId: cityMap['JAM'].id }],
-      },
-      fanProfile: {
-        create: {
-          favoriteCityId: cityMap['JAM'].id,
-          favoriteSportId: sportMap['CRICKET'].id,
-          cheerBio: 'Supporting Jampur cricket and volleyball since 2018! Let’s go Lions!',
-        },
-      },
-    },
-  });
-  console.log('[OK] Seeded Demo Users with Profiles & RBAC assignments');
-
-  // 8. Seed Active Teams & Roster
-  const jampurLions = await prisma.team.upsert({
-    where: { cityId_sportId_code: { cityId: cityMap['JAM'].id, sportId: sportMap['CRICKET'].id, code: 'JLCC' } },
-    update: { status: 'ACTIVE' },
-    create: {
-      name: 'Jampur Lions CC',
-      code: 'JLCC',
-      cityId: cityMap['JAM'].id,
-      sportId: sportMap['CRICKET'].id,
-      captainId: captainAli.id,
-      status: 'ACTIVE',
-      members: {
-        create: [
-          { playerId: captainAli.id, role: 'CAPTAIN', jerseyNumber: 7, status: 'ACTIVE' },
-          { playerId: playerBilal.id, role: 'PLAYER', jerseyNumber: 99, status: 'ACTIVE' },
-        ],
-      },
-    },
-  });
-
-  const dgKhanFalcons = await prisma.team.upsert({
-    where: { cityId_sportId_code: { cityId: cityMap['DGK'].id, sportId: sportMap['CRICKET'].id, code: 'DGKF' } },
-    update: { status: 'ACTIVE' },
-    create: {
-      name: 'DG Khan Falcons',
-      code: 'DGKF',
-      cityId: cityMap['DGK'].id,
-      sportId: sportMap['CRICKET'].id,
-      captainId: superAdmin.id,
-      status: 'ACTIVE',
-      members: {
-        create: [
-          { playerId: superAdmin.id, role: 'CAPTAIN', jerseyNumber: 10, status: 'ACTIVE' },
-        ],
-      },
-    },
-  });
-
-  const jampurUnitedFC = await prisma.team.upsert({
-    where: { cityId_sportId_code: { cityId: cityMap['JAM'].id, sportId: sportMap['FOOTBALL'].id, code: 'JUFC' } },
-    update: { status: 'ACTIVE' },
-    create: {
-      name: 'Jampur United Football Club',
-      code: 'JUFC',
-      cityId: cityMap['JAM'].id,
-      sportId: sportMap['FOOTBALL'].id,
-      captainId: captainAli.id,
-      status: 'ACTIVE',
-    },
-  });
-
-  // Seed Team Standings
-  await prisma.teamRanking.deleteMany({
-    where: { teamId: { in: [jampurLions.id, dgKhanFalcons.id] } },
-  });
-
-  await prisma.teamRanking.create({
-    data: {
-      teamId: jampurLions.id,
-      sportId: sportMap['CRICKET'].id,
-      cityId: cityMap['JAM'].id,
-      regionId: southPunjab.id,
-      rankPosition: 1,
-      points: 12,
-      goalDiffOrNrr: 1.45,
-    },
-  });
-
-  await prisma.teamRanking.create({
-    data: {
-      teamId: dgKhanFalcons.id,
-      sportId: sportMap['CRICKET'].id,
-      cityId: cityMap['DGK'].id,
-      regionId: southPunjab.id,
-      rankPosition: 2,
-      points: 8,
-      goalDiffOrNrr: 0.85,
-    },
-  });
-
-  console.log('--- Comprehensive Seed Completed Successfully! ---');
+  console.log('[OK] Master Super Administrator Account Ready: admin@sports.pk / Admin@Sports2026!');
+  console.log('\n--- Platform is clean and ready for real users and real teams! ---');
 }
 
 main()
